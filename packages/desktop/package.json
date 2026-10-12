@@ -1,0 +1,11 @@
+{
+  "name": "@gungame/desktop",
+  "productName": "Gun Game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell that runs the client as a desktop app",
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "31.7.7"
+  }
+}

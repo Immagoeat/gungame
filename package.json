@@ -1,0 +1,28 @@
+{
+  "name": "gungame",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gun Game — 3D FPS with gun game, campaign and multiplayer modes",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @gungame/client",
+    "dev:desktop": "node scripts/dev-desktop.mjs",
+    "dev:server": "npm run dev -w @gungame/server",
+    "build": "npm run build -w @gungame/client",
+    "start": "npm run build && ./gungame.sh",
+    "server": "npm run start -w @gungame/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.3",
+    "vitest": "~2.1.9"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}
