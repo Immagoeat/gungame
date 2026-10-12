@@ -4,7 +4,7 @@ import type { PropDef } from '@gungame/shared';
 type CameraDef = Extract<PropDef, { kind: 'securityCamera' }>;
 type MonitorDef = Extract<PropDef, { kind: 'monitorBank' }>;
 
-import { LAYER_CCTV_ONLY, LAYER_SCREENS } from '../core/layers';
+import { LAYER_CCTV_ONLY, LAYER_EFFECTS, LAYER_SCREENS } from '../core/layers';
 
 export { LAYER_CCTV_ONLY, LAYER_SCREENS };
 
@@ -191,6 +191,7 @@ export class SecuritySystem {
     const view = new THREE.PerspectiveCamera(72, FEED_W / FEED_H, 0.1, 120);
     view.position.z = -0.35;
     view.layers.enable(LAYER_CCTV_ONLY);
+    view.layers.enable(LAYER_EFFECTS);
     head.add(view);
 
     this.root.add(pivot);

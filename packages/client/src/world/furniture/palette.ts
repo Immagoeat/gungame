@@ -117,7 +117,6 @@ export const P = {
   art: (seed: number) => std(`art${seed}`, { map: tex(`artT${seed}`, () => canvasTexture(256, (g, s) => paint.art(g, s, seed)), 1), roughness: 0.7 }),
   carPaint: (color: number) => std(`car${color}`, { color, roughness: 0.15, metalness: 0.7 }),
   felt: (color = 0x1f6b3a) => std(`felt${color}`, { color, roughness: 1 }),
-  flame: () => std('flame', { color: 0xff8a2a, emissive: 0xff6a10, emissiveIntensity: 2.5, transparent: true, opacity: 0.85, depthWrite: false }),
   led: (color: number) => std(`led${color}`, { color, emissive: color, emissiveIntensity: 3 }),
   serverFace: () => std('serverFaceF', {
     color: 0x22262c, map: tex('serverT', () => canvasTexture(128, paint.serverFace), 1),

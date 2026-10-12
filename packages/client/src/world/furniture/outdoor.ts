@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Kit } from './kit';
+import { createFire } from '../fire';
 import { P } from './palette';
 import type { Builder } from './types';
 
@@ -338,18 +339,10 @@ export const outdoor: Record<string, Builder> = {
     const r = p.w / 2;
     k.lathe([[r - 0.25, 0], [r, 0], [r, p.h - 0.05], [r + 0.03, p.h], [r - 0.3, p.h], [r - 0.3, 0.1]], 0, 0, 0, P.stone(0x8f8a82), { seg: 32 });
     k.cyl(r - 0.3, r - 0.3, 0.02, 0, p.h - 0.08, 0, P.glass(0x3a6ea5, 0.9), { seg: 32 });
-    const flames = new THREE.Group();
-    const fm = P.flame();
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2;
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.45, 8), fm);
-      f.position.set(Math.cos(a) * 0.22, p.h + 0.15, Math.sin(a) * 0.22);
-      flames.add(f);
-    }
-    k.dynamic(flames, (_dt, t) => flames.children.forEach((f, i) => f.scale.set(1, 0.7 + 0.5 * Math.abs(Math.sin(t * 9 + i * 1.7)), 1)));
-    const fire = new THREE.PointLight(0xff8a3a, 6, 7, 2);
-    k.light(fire, 0, p.h + 0.4, 0);
-    k.dynamic(new THREE.Object3D(), (_dt, t) => { fire.intensity = 5 + Math.sin(t * 11) * Math.sin(t * 7) * 1.5; });
+    // Gas burner ring under the fire glass.
+    const fire = createFire({ kind: 'gas', width: 0, depth: 0, ring: Math.min(0.26, r - 0.4), height: 0.5, tongues: 22, light: 6, lightRange: 7 });
+    fire.object.position.set(0, p.h - 0.07, 0);
+    k.dynamic(fire.object, (_dt, t) => fire.update(t));
   },
 
   stringLights: (k, p) => {

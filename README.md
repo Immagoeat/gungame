@@ -108,6 +108,8 @@ packages/
 - **Character:** any character on a Mixamo skeleton works (Mixamo, Character Creator, many store models). Export as
   GLB with Idle, Walk and Run clips and replace `models/characters/soldier/Soldier.glb` (or point `MODEL_FILES.player`
   at it). Mixamo downloads FBX; convert with Blender (File › Import FBX, then Export glTF 2.0 as .glb).
+- **Fire** (`world/fire.ts`): shader-animated flame tongues, ember bed, sparks and charred logs with glowing cracks
+  for wood fires; blue-rooted flames over glowing fire glass for gas; a light that flickers, shifts colour and sways.
 - **Graphics**: generated normal maps on every surface, ambient occlusion, bloom and SMAA. Settings › Graphics quality
   switches presets (low turns post-processing off).
 - **Weapons carried**: the mode hands out a set (`WeaponSystem.setInventory`); 1-9 / mouse wheel switch, Q swaps to

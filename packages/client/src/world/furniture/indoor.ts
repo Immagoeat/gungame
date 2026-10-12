@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { Kit } from './kit';
+import { charredLog, createFire, glowLogs } from '../fire';
 import { P } from './palette';
 import type { Builder } from './types';
 
-const flick = (t: number, seed: number) => 0.75 + 0.25 * Math.sin(t * 13 + seed) * Math.sin(t * 7.3 + seed * 2.1);
 
 /** Upholstered seating shared by sofas and armchairs. */
 function upholstered(k: Kit, w: number, h: number, d: number, fabric: THREE.Material, seats: number, pillow?: THREE.Material): void {
@@ -315,21 +315,14 @@ export const indoor: Record<string, Builder> = {
     k.box(fb, 0.85, 0.05, 0, 0.45, -p.d / 2 + 0.42, P.iron());
     for (const sx of [-1, 1]) k.box(0.05, 0.85, 0.3, sx * fb / 2, 0.45, -p.d / 2 + 0.55, P.iron());
     k.box(fb, 0.05, 0.3, 0, 0.88, -p.d / 2 + 0.55, P.iron());
-    const bark = P.bark();
-    k.cyl(0.06, 0.06, 0.6, -0.05, 0.12, -p.d / 2 + 0.58, bark, { rot: [0, 0.3, Math.PI / 2], seg: 8 });
-    k.cyl(0.055, 0.055, 0.55, 0.08, 0.12, -p.d / 2 + 0.52, bark, { rot: [0, -0.4, Math.PI / 2], seg: 8 });
-    k.cyl(0.05, 0.05, 0.5, 0, 0.2, -p.d / 2 + 0.56, bark, { rot: [0, 0.1, Math.PI / 2], seg: 8 });
-    const flames = new THREE.Group();
-    const fm = P.flame();
-    for (let i = 0; i < 5; i++) {
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.07 + (i % 2) * 0.03, 0.4, 8), fm);
-      f.position.set(-0.2 + i * 0.1, 0.38, -p.d / 2 + 0.56);
-      flames.add(f);
-    }
-    k.dynamic(flames, (_dt, t) => flames.children.forEach((f, i) => { f.scale.set(1, flick(t, i) * 1.2, 1); }));
-    const fire = new THREE.PointLight(0xff8a3a, 6, 6, 2);
-    k.light(fire, 0, 0.5, -p.d / 2 + 0.9);
-    k.dynamic(new THREE.Object3D(), (_dt, t) => { fire.intensity = 5 * flick(t, 9); });
+    // Charred logs with glowing cracks, on a bed of coals, burning.
+    const log = charredLog();
+    k.cyl(0.06, 0.06, 0.6, -0.05, 0.12, -p.d / 2 + 0.58, log, { rot: [0, 0.3, Math.PI / 2], seg: 10 });
+    k.cyl(0.055, 0.055, 0.55, 0.08, 0.12, -p.d / 2 + 0.52, log, { rot: [0, -0.4, Math.PI / 2], seg: 10 });
+    k.cyl(0.05, 0.05, 0.5, 0, 0.2, -p.d / 2 + 0.56, log, { rot: [0, 0.1, Math.PI / 2], seg: 10 });
+    const fire = createFire({ kind: 'wood', width: 0.5, depth: 0.16, height: 0.42, tongues: 16, light: 6, lightRange: 6 });
+    fire.object.position.set(0, 0.2, -p.d / 2 + 0.56);
+    k.dynamic(fire.object, (_dt, t) => { fire.update(t); glowLogs(t); });
     // Mantel styling.
     k.lathe([[0, 0], [0.06, 0], [0.08, 0.1], [0.04, 0.25]], -0.6, 1.32, -p.d / 2 + 0.5, P.brass());
     k.lathe([[0, 0], [0.06, 0], [0.08, 0.1], [0.04, 0.25]], 0.6, 1.32, -p.d / 2 + 0.5, P.brass());

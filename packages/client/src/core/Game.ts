@@ -17,7 +17,7 @@ import { Projectiles } from '../weapons/Projectiles';
 import { WeaponSystem } from '../weapons/WeaponSystem';
 import type { GlassPane } from '../world/GlassSystem';
 import type { LightFixture } from '../world/LightSystem';
-import { LAYER_SHADOW_PROXY } from './layers';
+import { LAYER_EFFECTS, LAYER_SHADOW_PROXY } from './layers';
 import { LAYER_SCREENS, type SecurityCam } from '../world/SecuritySystem';
 import { World } from '../world/World';
 import { AudioSystem } from './Audio';
@@ -80,6 +80,7 @@ export class Game {
     this.gfx.prepare(this.gfx.scene);
     this.gfx.camera.layers.enable(LAYER_SCREENS);
     this.gfx.camera.layers.enable(LAYER_SHADOW_PROXY);
+    this.gfx.camera.layers.enable(LAYER_EFFECTS);
     this.gfx.scene.add(this.avatar.group);
     this.fx = new Effects(this.gfx.scene);
     this.debris = new Debris(this.gfx.scene, () => this.world.colliders, () => this.world.water);
