@@ -15,3 +15,6 @@ See README.md for the layout and commands. Conventions:
 - 3D model files live in `packages/client/public/models/` and load before `Game` is built (`assets/AssetLibrary.ts`). Anything that uses a model must keep working without it (procedural fallback). Record every new file's source and license in `models/CREDITS.md`. Geometry from model files is shared between copies: never dispose it.
 - Character posing (`entities/character/rig.ts`) works in world space on Mixamo bone names, so it doesn't depend on a rig's local bone axes.
 - The packaged app serves the client from `app://game/` (see `desktop/main.cjs`) because `fetch` doesn't work on `file://`. Rebuild (`npm run build`) after client changes; `gungame.sh` only builds when `dist` is missing.
+- `Game.startMatch` is async (it loads behind the loading screen); don't `await` it from code that needs to keep running, and check `loadToken` after every await when extending it.
+- New missions: give them a `loadingImage` (render one from the game at 1920x1080, save as JPEG under `public/images/loading/`) and, optionally, an `intro` cutscene.
+- Mansion chapter rules live in `modes/campaign/mansionMission.ts`; guard perception and alarm tuning in `npc/GuardManager.ts`. Keep `NavGrid.test.ts` passing when moving guards, doors or the hostage (every route must be walkable).

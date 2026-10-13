@@ -50,7 +50,11 @@ const ledOn = new THREE.MeshBasicMaterial({ color: 0xff2020 });
 
 /** Security cameras that pan, blink and feed live video to monitor banks. */
 export class SecuritySystem {
-  private readonly cams: SecurityCam[] = [];
+  readonly cams: SecurityCam[] = [];
+  /** Feeds looped from the security terminal: the cameras see nothing. */
+  looped = false;
+  /** Cameras that see nothing (taken over by someone friendly). */
+  readonly ignored = new Set<string>();
   private readonly screens: Screen[] = [];
   private readonly banks: THREE.Vector3[] = [];
   private time = 0;

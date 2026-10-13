@@ -1,6 +1,6 @@
 import { doorway, glazing, MapBuilder, rect, type FurnitureOptions, type Opening, type Rect, type WallMaterial } from './builder';
 import type { Facing, FurnitureType } from './furniture';
-import type { BlockMaterial, MapDef } from './types';
+import type { BlockMaterial, GuestActivity, MapDef, PropDef } from './types';
 
 /**
  * "The Mansion": a Beverly Hills estate.
@@ -70,6 +70,8 @@ export function createMansionMap(): MapDef {
   buildRoof(m);
   buildServiceStairs(m);
   buildSecurityCameras(m);
+  buildParty(m);
+  buildSecurityTeam(m);
   buildZones(m);
   return {
     id: 'mansion',
@@ -81,7 +83,171 @@ export function createMansionMap(): MapDef {
     zones: m.zones,
     playerSpawn: { x: 0, y: G, z: 41 },
     spawnYaw: 0,
+    // A party night: the mission starts at 9 pm.
+    timeOfDay: 21,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Chapter 1: Victor Castell's private security, the doors that matter, the hostage (Daniel Reyes)
+// and the places the mission uses. Coordinates: +x east, -z north; floors at MANSION_LEVELS.
+
+function buildSecurityTeam(m: MapBuilder): void {
+  type GuardDef = Extract<PropDef, { kind: 'guard' }>;
+  const guard = (g: Omit<GuardDef, 'kind'>) => m.props.push({ kind: 'guard', ...g });
+  const S = Math.PI, E = -Math.PI / 2, Wst = Math.PI / 2, N = 0;
+  const p = (x: number, y: number, z: number, wait?: number) => ({ x, y, z, wait });
+
+  // ---- Grounds, front.
+  guard({ id: 'door-w', x: -2.2, y: G, z: 7.9, yaw: S, weapon: 'pistol', scan: 0.6 });
+  guard({ id: 'door-e', x: 2.2, y: G, z: 7.9, yaw: S, weapon: 'pistol', scan: 0.6 });
+  guard({ id: 'fountain', x: -7, y: G, z: 19, yaw: S, weapon: 'pistol',
+    route: [p(-7, G, 19, 3), p(7, G, 19, 2), p(7, G, 27, 3), p(-7, G, 27, 2)] });
+  guard({ id: 'motor', x: 14, y: G, z: 13, yaw: E, weapon: 'smg',
+    route: [p(14, G, 13, 2), p(33, G, 13, 4), p(33, G, 9, 2), p(19, G, 9, 3)] });
+  guard({ id: 'west-lawn', x: -30, y: G, z: 28, yaw: S, weapon: 'pistol',
+    route: [p(-30, G, 28, 4), p(-30, G, 12, 2), p(-22, G, 12, 3), p(-22, G, 28, 2)] });
+  guard({ id: 'east-lawn', x: 40, y: G, z: 20, yaw: N, weapon: 'pistol',
+    route: [p(40, G, 20, 3), p(40, G, -14, 4), p(38, G, 20, 1)] });
+
+  // ---- Grounds, back (party security).
+  guard({ id: 'patio-w', x: -18, y: G, z: -21, yaw: E, weapon: 'pistol',
+    route: [p(-18, G, -21, 5), p(-8, G, -20, 3), p(-18, G, -25, 4)] });
+  guard({ id: 'patio-e', x: 18, y: G, z: -21, yaw: Wst, weapon: 'pistol',
+    route: [p(18, G, -21, 4), p(16, G, -27, 5), p(19, G, -32, 3)] });
+  guard({ id: 'pool-far', x: -14, y: G, z: -41.5, yaw: N, weapon: 'smg',
+    route: [p(-14, G, -41.5, 6), p(12, G, -41.5, 6)] });
+  guard({ id: 'tennis', x: -25, y: G, z: -30, yaw: Wst, weapon: 'pistol', scan: 1.2 });
+
+  // ---- Ground floor.
+  guard({ id: 'foyer', x: 0, y: G, z: 2.5, yaw: S, weapon: 'pistol', scan: 0.9 });
+  guard({ id: 'west-wing', x: -10, y: G, z: 4.6, yaw: Wst, weapon: 'pistol',
+    route: [p(-10, G, 4.6, 3), p(-18, G, 0, 4), p(-18, G, -12, 3), p(-10, G, -12, 3)] });
+  guard({ id: 'great-room', x: 3, y: G, z: -10, yaw: N, weapon: 'pistol',
+    route: [p(3, G, -10, 6), p(-3, G, -15, 5)] });
+  guard({ id: 'office', x: 14, y: G, z: -1, yaw: Wst, weapon: 'pistol',
+    route: [p(14, G, -1, 6), p(12, G, 4, 4), p(16.5, G, 4.5, 5)] });
+  guard({ id: 'lounge', x: 14, y: G, z: -12, yaw: S, weapon: 'pistol',
+    route: [p(14, G, -12, 5), p(20, G, -15, 4), p(9, G, -15, 4)] });
+  guard({ id: 'garage', x: 24.5, y: G, z: 3.2, yaw: E, weapon: 'shotgun', scan: 1.4 });
+
+  // ---- Basement: the security room, the vault, the gallery hall.
+  guard({ id: 'monitors', x: 15, y: B, z: -2.9, yaw: N, weapon: 'pistol', seated: true });
+  guard({ id: 'sec-room', x: 19, y: B, z: 3, yaw: Wst, weapon: 'smg',
+    route: [p(19, B, 3, 6), p(12, B, 1.5, 5), p(19.5, B, -4.5, 4)] });
+  guard({ id: 'vault', x: 19.4, y: B, z: -8, yaw: S, weapon: 'rifle', scan: 0.5 });
+  guard({ id: 'cellar', x: -2, y: B, z: 4, yaw: E, weapon: 'pistol',
+    route: [p(-2, B, 4, 4), p(-18, B, 4, 4), p(-2, B, 0, 3)] });
+
+  // ---- Second floor: Kessler, head of security, with the keycard, and his partner a few steps behind.
+  guard({ id: 'kessler', name: 'Kessler', look: 'chief', carries: 'keycard', x: 14, y: F2, z: -12, yaw: Wst, weapon: 'rifle',
+    route: [p(14, F2, -12, 6), p(8.9, F2, -7, 0), p(4, F2, -5, 2), p(0, F2, -12, 7), p(4, F2, -5, 0), p(8.9, F2, -7, 0), p(18, F2, -15, 5)] });
+  guard({ id: 'kessler-2', x: 16, y: F2, z: -13, yaw: Wst, weapon: 'rifle',
+    route: [p(16, F2, -13, 6), p(8.9, F2, -7.5, 0), p(3, F2, -5.2, 2), p(-2, F2, -11, 7), p(3, F2, -5.2, 0), p(8.9, F2, -7.5, 0), p(17, F2, -16, 5)] });
+  guard({ id: 'west-hall', x: -10, y: F2, z: -5.5, yaw: E, weapon: 'pistol',
+    route: [p(-10, F2, -5.5, 4), p(-20, F2, -5.5, 4)] });
+
+  // ---- Third floor: the penthouse study (Reyes) and the terrace.
+  guard({ id: 'study-1', x: -2.5, y: F3, z: 3.5, yaw: E, weapon: 'smg', scan: 0.8 });
+  guard({ id: 'study-2', x: 3.6, y: F3, z: -4.2, yaw: S, weapon: 'pistol',
+    route: [p(3.6, F3, -4.2, 6), p(-3.5, F3, -3.5, 6)] });
+  guard({ id: 'terrace', x: -12, y: F3, z: -7, yaw: E, weapon: 'rifle',
+    route: [p(-12, F3, -7, 4), p(-3, F3, -9, 3), p(14, F3, -9, 4), p(-12, F3, -15, 4)] });
+  guard({ id: 'roof', x: 2, y: R, z: 4.5, yaw: S, weapon: 'sniper', scan: 1.6 });
+
+  // Doors: the security room's, and the penthouse's two (keycard).
+  m.props.push({ kind: 'door', id: 'security', x: 10, y: B, z: 3.7, axis: 'z', width: 1.4, height: 2.3 });
+  m.props.push({ kind: 'door', id: 'study-west', x: 6, y: F3, z: 3.3, axis: 'z', width: 1.4, height: 2.3, lock: 'keycard' });
+  m.props.push({ kind: 'door', id: 'study-north', x: 0, y: F3, z: -6, axis: 'x', width: 2.2, height: 2.6, lock: 'keycard' });
+
+  // Reyes, tied to a chair in the middle of the study.
+  f('diningChair', 2.2, F3, -0.8, 'west');
+  m.props.push({ kind: 'hostage', id: 'reyes', x: 2.2, y: F3, z: -0.8, yaw: Wst, seat: 0.47 });
+
+  // Where you leave (by the van), where reinforcements come from, where the security terminal is.
+  m.props.push({ kind: 'marker', id: 'extract', x: 0.4, y: G, z: 37.4 });
+  m.props.push({ kind: 'marker', id: 'reinforce-gate', x: 0, y: G, z: 52, yaw: 0 });
+  m.props.push({ kind: 'marker', id: 'reinforce-back', x: -20, y: G, z: -30, yaw: 0 });
+  m.props.push({ kind: 'marker', id: 'terminal', x: 15, y: B + 1.05, z: -4.3 });
+}
+
+// ---------------------------------------------------------------------------
+// Tonight's party (dressing only: no guests yet). Searchlights sweep the sky from the roofs, the
+// facade is washed in colour, a red carpet runs to the door under a balloon arch, and out back a DJ
+// plays to the pool deck between a bar and a champagne tower.
+
+function buildParty(m: MapBuilder): void {
+  // Sky searchlights: the main roof's corners and the penthouse roof.
+  [[-20.8, 4.8], [20.8, 4.8], [-20.8, -16.8], [20.8, -16.8]].forEach(([x, z], i) => f('searchlight', x, F3, z, 'south', { variant: i }));
+  f('searchlight', 8.6, R, 4.4, 'south', { variant: 4 });
+  f('searchlight', 8.6, R, -4.4, 'south', { variant: 5 });
+
+  // Front: coloured uplights on the facade, red carpet and balloon arch at the door, valet by the gate.
+  const facade: [number, number][] = [[-16, 0x8a3cff], [-9, 0xff2fa0], [9, 0xff2fa0], [16, 0x8a3cff]];
+  for (const [x, color] of facade) f('uplight', x, G, HZ1 + 0.6, 'south', { color });
+  f('redCarpet', 0, G + 0.065, 11.1, 'south', { d: 9.4 });
+  f('balloonArch', 0, G + 0.06, 7.1, 'south');
+  f('valetStand', 6.2, G, 42.4, 'west');
+  for (const [x, z] of [[-8.4, 20.5], [8.4, 20.5], [-8.4, 27.5], [8.4, 27.5]]) f('cocktailTable', x, G, z);
+  f('car', -9, G, 11.6, 'east', { variant: 0, color: 0xeeeeee });
+  f('car', 17.5, G, 11.6, 'west', { variant: 1, color: 0x15171a });
+  for (const [x, z] of [[-15, 24], [15, 24], [-15, 31], [15, 31]]) f('ledOrb', x, G, z);
+
+  // Back: uplights, DJ booth and speakers on the east pool deck, bar on the west deck,
+  // champagne tower and cocktail tables on the patio, glowing orbs in the pool, string lights.
+  for (const x of [-9, 9]) f('uplight', x, G, HZ0 - 0.6, 'north', { color: 0x2f6bff, variant: 1 });
+  f('djBooth', 13.3, G, -32, 'west');
+  f('speakerStack', 13.3, G, -35.1, 'west');
+  f('speakerStack', 13.3, G, -28.9, 'west');
+  f('partyBar', -12.6, G, -32, 'east');
+  f('champagneTower', 0, G, -22.4);
+  for (const [x, z] of [[-6, -22.6], [6, -22.6], [-3.2, -24.8], [3.2, -24.8]]) f('cocktailTable', x, G, z);
+  for (const [x, z] of [[-6.5, -31], [-2.5, -33.6], [1.5, -30.2], [7.5, -33.2], [-8.5, -34.2]]) f('ledOrb', x, G - 0.4, z, 'south', { variant: 1, w: 0.5 });
+  f('stringLights', 0, G, -27.3, 'south', { w: 20, h: 3.4 });
+  f('stringLights', 0, G, -40.9, 'south', { w: 20, h: 3.4 });
+
+  // Guests. Facing uses the player's yaw convention (0 = north/-z, PI/2 = west, -PI/2 = east).
+  const S = Math.PI, E = -Math.PI / 2, Wst = Math.PI / 2;
+  let seed = 1;
+  const guest = (activity: GuestActivity, x: number, z: number, yaw: number, extra: Partial<Extract<PropDef, { kind: 'guest' }>> = {}) =>
+    m.props.push({ kind: 'guest', x, y: G, z, yaw, activity, seed: seed++, ...extra });
+  const pair = (x0: number, z0: number, x1: number, z1: number, activity: GuestActivity = 'chat') => {
+    guest(activity, x0, z0, Math.atan2(-(x1 - x0), -(z1 - z0)), { lookAt: { x: x1, y: G + 1.6, z: z1 } });
+    guest(activity, x1, z1, Math.atan2(-(x0 - x1), -(z0 - z1)), { lookAt: { x: x0, y: G + 1.6, z: z0 } });
+  };
+  // On the decks, and the dance floor in front of the booth: solo dancers, a crew of three doing the
+  // same moves, a couple dancing together, and people talking at the edge of the floor.
+  guest('dj', 14.1, -32, Wst);
+  const toBooth = (x: number, z: number) => Math.atan2(-(13.3 - x), -(-32 - z));
+  for (const [x, z] of [[11.9, -33.4], [11.0, -31.7], [12.1, -29.9]]) guest('dance', x, z, toBooth(x, z) + Math.sin(x * 7 + z) * 0.4);
+  for (const [x, z] of [[10.2, -34.4], [9.9, -33.2], [10.1, -32.0]]) guest('dance', x, z, toBooth(x, z), { crew: 100 });
+  const coupleA = { x: 9.6, z: -29.6 }, coupleB = { x: 10.4, z: -28.9 };
+  guest('dance', coupleA.x, coupleA.z, Math.atan2(-(coupleB.x - coupleA.x), -(coupleB.z - coupleA.z)), { crew: 200, lookAt: { x: coupleB.x, y: G + 1.6, z: coupleB.z } });
+  guest('dance', coupleB.x, coupleB.z, Math.atan2(-(coupleA.x - coupleB.x), -(coupleA.z - coupleB.z)), { crew: 200, lookAt: { x: coupleA.x, y: G + 1.6, z: coupleA.z } });
+  pair(8.6, -26.9, 9.6, -26.2, 'groove');
+  pair(8.2, -35.6, 8.9, -36.5, 'groove');
+  // Behind the bar, and two at it.
+  guest('bartender', -12.9, -32, E);
+  guest('drink', -11.25, -32.8, Wst, { lookAt: { x: -11.25, y: G + 1.55, z: -31.2 } });
+  guest('drink', -11.25, -31.2, Wst, { lookAt: { x: -11.25, y: G + 1.55, z: -32.8 } });
+  // Talking at the cocktail tables and by the champagne tower.
+  pair(-6.6, -22.4, -5.4, -22.8);
+  pair(5.5, -22.3, 6.5, -23.0);
+  pair(2.7, -25.4, 3.8, -24.4);
+  pair(-0.75, -21.3, 0.55, -21.15);
+  // Sitting on the loungers by the pool.
+  guest('sit', -8.5, -38.95, S, { seat: 0.38, lookAt: { x: -5.5, y: G + 1.15, z: -38.95 } });
+  guest('sit', -5.5, -38.95, S, { seat: 0.38, lookAt: { x: -8.5, y: G + 1.15, z: -38.95 } });
+
+  // Weapons to find: an SMG in the security room's gun locker, a shotgun on the garage workbench, a
+  // sniper rifle by the helicopter, and the golden gun on display in the vault.
+  m.props.push({ kind: 'weaponPickup', weapon: 'smg', x: 20.95, y: B + 1.12, z: 1.5, yaw: 0.3 });
+  m.props.push({ kind: 'weaponPickup', weapon: 'shotgun', x: 27.5, y: G + 0.93, z: -9.5, yaw: Math.PI / 2 + 0.2 });
+  m.props.push({ kind: 'weaponPickup', weapon: 'sniper', x: -3.4, y: R + 0.06, z: 3.6, yaw: 0.6 });
+  m.props.push({ kind: 'weaponPickup', weapon: 'golden', x: 13.5, y: B + 1.13, z: -10.5, yaw: 1.2 });
+
+  // Inside: a mirror ball over the great room.
+  f('discoBall', 0, G, -12, 'south', { h: ceil(G) - G });
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +330,14 @@ function buildGrounds(m: MapBuilder): void {
   f('gateLeaf', 3.95, G, W - 2.3, 'west');
   f('hedgeWall', -26, G, W - 0.95, 'south', { w: 36 });
   f('hedgeWall', 26, G, W - 0.95, 'south', { w: 36 });
+
+  // The street outside the gate (where the intro van arrives): asphalt with a dashed centre line,
+  // a stone sidewalk along the wall, and a cobbled apron into the gate.
+  m.overlay(-160, 48.5, 160, 56.5, G, 'asphalt');
+  for (let x = -158; x < 158; x += 6) m.box(x, G + 0.01, 52.42, x + 3, G + 0.04, 52.58, 'courtLine');
+  m.overlay(-160, W + 0.3, -4, 48.5, G, 'stone');
+  m.overlay(4, W + 0.3, 160, 48.5, G, 'stone');
+  m.overlay(-4, W - 0.3, 4, 48.5, G, 'cobble');
 
   // Cobbled driveway: entry drive, fountain loop, motor court and garage apron.
   m.overlay(-4, 32, 4, W - 0.3, G, 'cobble');

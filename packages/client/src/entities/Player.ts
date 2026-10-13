@@ -16,6 +16,8 @@ export class Player implements Mover {
   swimming = false;
   submerged = 0;
   waterLevel = -Infinity;
+  /** Walking speed multiplier (1 normally; slower when dragging a body). */
+  speedMul = 1;
   /** Camera height above the feet; eases towards the stance's eye height. */
   eyeHeight = STANCES.stand.eye;
   /** 0..1 breath left while underwater. */
@@ -31,6 +33,7 @@ export class Player implements Mover {
   recoilPitch = 0;
 
   reset(spawn: Vec3, yaw = 0): void {
+    this.speedMul = 1;
     this.pos.set(spawn.x, spawn.y, spawn.z);
     this.vel.set(0, 0, 0);
     this.hp = this.maxHp;

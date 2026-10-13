@@ -4,12 +4,13 @@ import { FURNITURE, type FurnitureType, type PropDef } from '@gungame/shared';
 import { indoor } from './indoor';
 import { Kit, type Dynamic } from './kit';
 import { outdoor } from './outdoor';
+import { party } from './party';
 import { special } from './special';
 import type { Builder } from './types';
 
 type FurnitureProp = Extract<PropDef, { kind: 'furniture' }>;
 
-const BUILDERS = { ...indoor, ...special, ...outdoor } as Record<FurnitureType, Builder | undefined>;
+const BUILDERS = { ...indoor, ...special, ...outdoor, ...party } as Record<FurnitureType, Builder | undefined>;
 
 export function buildFurniture(prop: FurnitureProp): Kit {
   const [w, h, d] = FURNITURE[prop.type].size;

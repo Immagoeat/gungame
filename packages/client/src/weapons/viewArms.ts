@@ -3,6 +3,8 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { PLAYER_HEIGHT, type WeaponId } from '@gungame/shared';
 import { getModel, MODEL_FILES } from '../assets/AssetLibrary';
 import { handHolds, reach } from '../entities/character/handPoses';
+import { dressSoldier } from '../entities/character/soldierOutfit';
+import { characterLook } from '../core/characterLook';
 import {
   addArmsAttribute, bone, eyeInHead, findBones, regionMaterial, scaleToHeight, worldPos, type BoneMap,
 } from '../entities/character/rig';
@@ -77,7 +79,9 @@ class ModelArms implements ViewArms {
     const bones = findBones(model);
     try {
       scaleToHeight(model, bones, PLAYER_HEIGHT);
-    } catch {
+      dressSoldier(model, characterLook.get());
+    } catch (err) {
+      console.warn('First-person arms could not be built from the character model.', err);
       return null;
     }
     const eyeLocal = eyeInHead(bones);

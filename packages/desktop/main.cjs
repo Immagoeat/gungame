@@ -18,8 +18,11 @@ function serveDist() {
   });
 }
 
+let mainWindow = null;
+
 function createWindow() {
   const win = new BrowserWindow({
+    show: false,
     width: 1280,
     height: 800,
     backgroundColor: '#000000',
@@ -29,6 +32,9 @@ function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
   win.setMenu(null);
+  mainWindow = win;
+  // Show once the first frame is ready, so there's no white flash on launch.
+  win.once('ready-to-show', () => win.show());
 
   const devUrl = process.env.GUNGAME_DEV_URL;
   if (devUrl) win.loadURL(devUrl);
@@ -43,6 +49,14 @@ function createWindow() {
     if (input.key === 'F12') win.webContents.toggleDevTools();
   });
 }
+
+// One copy of the game at a time: launching it again focuses the open window.
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
 
 app.whenReady().then(() => {
   serveDist();

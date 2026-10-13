@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 export default defineConfig({
   // Relative asset paths so the build loads from file:// inside Electron
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(version) },
   server: { port: 5173 },
   // Pre-bundle three and its addons together so dev doesn't load two copies of three.
   optimizeDeps: {
@@ -17,6 +21,8 @@ export default defineConfig({
       'three/examples/jsm/postprocessing/EffectComposer.js',
       'three/examples/jsm/postprocessing/GTAOPass.js',
       'three/examples/jsm/postprocessing/OutputPass.js',
+      'three/examples/jsm/postprocessing/Pass.js',
+      'three/examples/jsm/postprocessing/ShaderPass.js',
       'three/examples/jsm/postprocessing/RenderPass.js',
       'three/examples/jsm/postprocessing/SMAAPass.js',
       'three/examples/jsm/postprocessing/UnrealBloomPass.js',

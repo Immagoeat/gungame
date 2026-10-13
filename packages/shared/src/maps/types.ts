@@ -1,3 +1,4 @@
+import type { WeaponId } from '../weapons';
 import type { Vec3 } from '../math/vec';
 import type { FurnitureType } from './furniture';
 import type { BlockMaterial } from './materials';
@@ -25,6 +26,9 @@ export interface Block {
  * Non-box decorations and gameplay objects. Rotations use the player's convention:
  * yaw 0 faces -z (north), positive yaw turns left; pitch < 0 looks down.
  */
+/** groove: chatting by the dance floor, moving to the music while they talk. */
+export type GuestActivity = 'dance' | 'groove' | 'chat' | 'drink' | 'dj' | 'bartender' | 'sit';
+
 export type PropDef =
   | { kind: 'securityCamera'; id: string; label: string; x: number; y: number; z: number; yaw: number; pitch: number; sweep: number }
   | { kind: 'monitorBank'; x: number; y: number; z: number; yaw: number; cols: number; rows: number }
@@ -38,6 +42,46 @@ export type PropDef =
   }
   | { kind: 'chandelier'; x: number; y: number; z: number; castShadow?: boolean }
   | { kind: 'palmCrown'; x: number; y: number; z: number }
+  /**
+   * A security guard. With a route they patrol it in a loop (pausing at each point); without one they
+   * hold their post, looking around within `scan` radians of their facing.
+   */
+  | {
+    kind: 'guard'; id: string; x: number; y: number; z: number; yaw: number;
+    weapon: WeaponId;
+    route?: { x: number; y: number; z: number; wait?: number }[];
+    scan?: number;
+    /** Sitting at a desk (watching monitors): slower to react. */
+    seated?: boolean;
+    /** Carries something the mission needs (searched from their body with E). */
+    carries?: string;
+    /** Display name for a named guard. */
+    name?: string;
+    look?: 'suit' | 'tactical' | 'chief';
+  }
+  /** A door in a doorway. `axis` is the direction the door's width runs. Locked doors need a key item. */
+  | { kind: 'door'; id: string; x: number; y: number; z: number; axis: 'x' | 'z'; width: number; height: number; lock?: string; open?: boolean }
+  /** A mission character waiting somewhere (the hostage), seated, facing yaw. */
+  | { kind: 'hostage'; id: string; x: number; y: number; z: number; yaw: number; seat: number }
+  /** A named place the mission uses (extraction point, reinforcement spawn, ...). */
+  | { kind: 'marker'; id: string; x: number; y: number; z: number; yaw?: number }
+  /** A weapon lying in the world; picking it up (E) unlocks it for good. */
+  | { kind: 'weaponPickup'; x: number; y: number; z: number; yaw: number; weapon: WeaponId }
+  | {
+    /** A party guest (client-side scenery: they dance, chat, drink, DJ, tend bar or sit). */
+    kind: 'guest'; x: number; y: number; z: number;
+    /** Facing, same convention as the player's yaw. */
+    yaw: number;
+    activity: GuestActivity;
+    /** Picks their look and gives each their own timing. */
+    seed: number;
+    /** Who or what they look at while chatting (world point). */
+    lookAt?: { x: number; y: number; z: number };
+    /** Dancers in the same crew dance the same moves together. */
+    crew?: number;
+    /** Seat height above y, for 'sit'. */
+    seat?: number;
+  }
   | {
     kind: 'furniture'; type: FurnitureType; x: number; y: number; z: number; yaw: number;
     /** Size overrides (see FURNITURE for defaults). */

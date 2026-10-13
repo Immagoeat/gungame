@@ -11,3 +11,6 @@ export * from './gungame';
 export * from './protocol';
 export * from './ballistics';
 export * from './attachments';
+export * from './character';
+export * from './unlocks';
+export * from './nav/NavGrid';

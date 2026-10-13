@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { Loadout, Stance, WeaponId } from '@gungame/shared';
+import type { CharacterLook, Loadout, Stance, WeaponId } from '@gungame/shared';
+import { characterLook } from '../core/characterLook';
 import { getModel, MODEL_FILES } from '../assets/AssetLibrary';
 import { CharacterAvatar } from './character/CharacterAvatar';
 import { ProceduralAvatar } from './ProceduralAvatar';
@@ -22,6 +23,23 @@ export interface AvatarState {
   /** The first-person gun's placement in camera space (the body holds the gun in the same spot). */
   gunOffset: THREE.Vector3;
   gunRotation: THREE.Quaternion;
+  /**
+   * Cutscene posing (all optional):
+   * - seat: sitting (world heights of the seat and floor); blend 0..1 rises or sits down.
+   * - hold: carry the gun relative to the body instead of the camera ('lowReady' standing,
+   *   'seated' resting between the knees); blend 0..1 eases between that and the camera hold.
+   * - touchEar: 0..1, left hand to the headset (talking on the radio).
+   * - lookAt: turn the head towards a world point.
+   */
+  seat?: { seat: number; floor: number; lean?: number; blend?: number };
+  /** `rise` (0..1) moves the gun from the seated carry to low ready while standing up. */
+  hold?: { kind: 'lowReady' | 'seated'; blend: number; rise?: number };
+  touchEar?: number;
+  lookAt?: THREE.Vector3;
+  /** 0..1: collapsing to the ground (dead or knocked out); 1 = lying on their back. */
+  down?: number;
+  /** Hands tied behind the back (a hostage). */
+  restrained?: boolean;
 }
 
 /** The player's body: seen by security cameras, as legs from first person, and in shadows. */
@@ -33,11 +51,11 @@ export interface Avatar {
 }
 
 /** The character model if it loaded, otherwise the built-in jointed figure. */
-export function createAvatar(): Avatar {
+export function createAvatar(look: CharacterLook = characterLook.get()): Avatar {
   const gltf = getModel(MODEL_FILES.player);
   if (gltf) {
     try {
-      return new CharacterAvatar(gltf);
+      return new CharacterAvatar(gltf, look);
     } catch (err) {
       console.warn('Character model could not be rigged; using the built-in body.', err);
     }

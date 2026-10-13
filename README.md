@@ -93,6 +93,31 @@ packages/
   models. The pistol is a Glock 17 Gen5 built from its real profiles (`weapons/glock.ts`); the SMG, shotgun and
   assault rifle are still built from parts until models are added. Finishes repaint a
   model's materials but keep its surface detail; the "Factory" finish shows the original.
+- **Character customization** (`shared/src/character.ts`, Character screen in `ui/CharacterScreen.ts`): uniform camo,
+  headgear, vest, skin tone, facial hair, hair, gloves and boots. `entities/character/soldierOutfit.ts` generates the
+  soldier's clothing and gear as skinned meshes on the character's skeleton for the chosen look (saved in
+  `core/characterLook.ts`); the body, cutscenes and first-person arms all use it.
+- **Party guests** (`guest` props in `buildParty`; `world/PartySystem.ts`, `entities/party/PartyGuest.ts`): dressed
+  people on the character rig who dance on the beat of the music (several dance styles), chat in pairs with
+  drinks (sipping, talking with their hands, nodding, laughing), DJ, tend bar and lounge by the pool. Each guest's
+  look comes from its seed; bodies are generated once, shared, and drawn in one call with a per-guest palette
+  (`crowdMaterial`), and prebuilt in the background while the main menu is up.
+- **Poses** (`entities/character/poseKit.ts`): shared procedural layers over the animation clips: sitting (and
+  rising naturally), crouching with planted feet, placing hands, head look. Cutscenes drive the player's body with
+  `AvatarState.seat / hold / touchEar / lookAt` (e.g. elbows-on-knees in the van, low-ready pistol carry).
+- **The Mansion party** (`buildParty` in `shared/src/maps/mansion.ts`, models in `world/furniture/party.ts`): rooftop
+  searchlights, coloured uplights, DJ booth with moving heads and lasers, bars, champagne tower, red carpet and balloon
+  arch, glowing orbs. The mission starts at 9 pm under a starry sky.
+  Live-synthesised house music plays from the DJ booth (`audio/PartyMusic.ts`): positional, and muffled through walls.
+- **Chapter 1: The Mansion** (`modes/campaign/mansionMission.ts`): rescue Daniel Reyes. Stages: get inside, the
+  security terminal (loop the camera feeds), Kessler's keycard, free Reyes (lockdown), get him to the van. The party must
+  not find out before the escape (gunshots heard, a guest hit, a body seen by a guest, a fight near guests), or the
+  mission fails. Each stage saves a checkpoint (Continue / Restart in the menu). E interacts: takedowns from behind,
+  drag bodies, search, doors, hold E for the terminal and the ropes.
+- **Guards** (`npc/Guard.ts`, `npc/GuardManager.ts`; `guard` props in `buildSecurityTeam`): patrol routes, an
+  awareness meter (distance, stance, light, night), noise from footsteps, shots and glass, cameras, body discovery,
+  alarm levels 0–3 with reinforcement waves. Paths come from `shared/src/nav/NavGrid.ts` (0.5 m grid built from
+  colliders); sight uses `World.clearLine`. Doors (`world/DoorSystem.ts`) can need key items.
 - **The player character** (`entities/character/`) is a rigged, animated character model (Mixamo skeleton). Clips
   drive walking and running; crouch (leg IK keeps the feet planted), prone crawl, swimming, aiming and both hands on the
   gun (two-bone IK, posed fingers) are layered on procedurally. The same model's arms are the first-person arms
@@ -110,10 +135,28 @@ packages/
   at it). Mixamo downloads FBX; convert with Blender (File › Import FBX, then Export glTF 2.0 as .glb).
 - **Fire** (`world/fire.ts`): shader-animated flame tongues, ember bed, sparks and charred logs with glowing cracks
   for wood fires; blue-rooted flames over glowing fire glass for gas; a light that flickers, shifts colour and sways.
+- **God rays** (`core/GodRaysPass.ts`): volumetric sunlight. Each pixel's view ray is marched through the sun's
+  shadow map, so beams show through windows and between trees, columns and palms, warm at sunset and faint by moonlight.
+  On for medium and high quality.
 - **Graphics**: generated normal maps on every surface, ambient occlusion, bloom and SMAA. Settings › Graphics quality
   switches presets (low turns post-processing off).
 - **Weapons carried**: the mode hands out a set (`WeaponSystem.setInventory`); 1-9 / mouse wheel switch, Q swaps to
   the last one, and each gun keeps its own magazine. Gun Game gives one weapon at a time (the ladder).
+- **Loading** (`ui/LoadingScreen.ts`, `Game.startMatch`): matches load behind a loading screen with the mission's art,
+  briefing and tips. Loading is staged (build the map, set up the mode and intro, compile shaders in the background,
+  render a warm-up frame) so the first frames don't stall, then waits for a click, which also captures the mouse.
+  Background art lives in `public/images/loading/` (rendered from the game) and is named per mission/mode.
+- **Cutscenes** (`client/src/cutscenes/`): scripted scenes a mission names as its `intro`. A scene drives the camera,
+  the player's body and its own props each frame, with fades, a title card and subtitles (`CutsceneFrame`), then hands
+  over control where it leaves you; hold Space or Enter to skip. The Mansion opens with `mansionArrival` (about 32 s): an
+  aerial over the estate, a ride in the back of the van with radio chatter (`ARRIVAL_DIALOGUE`, easy to rewrite), the
+  van turning in through the gates, the door sliding open on you, and the camera moving into your eyes.
+  The van (`world/vehicles/van.ts`) stays parked on the drive.
+- **Sound**: everything is synthesised with WebAudio (`core/Audio.ts`), including the engine, radio squelch, night
+  ambience and the party music; Settings has separate main and music volume.
+- **Unlocks** (`shared/src/unlocks.ts`, `core/progress.ts`): you start with the assault rifle and pistol. Other guns
+  are found in missions (`weaponPickup` props; look at one and press E) and stay unlocked; the Golden Gun also comes
+  from winning Gun Game. Locked guns show in the Armory with how to get them.
 - **Campaign missions are data** (`client/src/modes/campaign/missions.ts`): map, loadout, objectives and story beats.
   In campaign, **V** toggles fly mode (noclip) for reviewing layouts.
 

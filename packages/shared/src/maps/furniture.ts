@@ -151,6 +151,20 @@ export const FURNITURE = {
   poolLight: { size: [0.3, 0.3, 0.05], solid: false },
   sconce: { size: [0.25, 0.45, 0.25], solid: false },
   hedgeWall: { size: [4, 2.6, 0.9] },
+
+  // Party
+  searchlight: { size: [1.3, 1.9, 1.3], resistance: 30 },
+  uplight: { size: [0.3, 0.3, 0.3], solid: false },
+  djBooth: { size: [3.2, 3.6, 1.4], resistance: 10, colliders: (w, _h, d) => [[-w / 2, 0, -d / 2, w / 2, 1.15, d / 2]] },
+  speakerStack: { size: [0.75, 2.1, 0.65], resistance: 8 },
+  cocktailTable: { size: [0.8, 1.1, 0.8], colliders: () => pole(0.3, 1.1) },
+  partyBar: { size: [3.2, 2.4, 1.6], resistance: 15, colliders: (w, _h, d) => [[-w / 2, 0, d / 2 - 0.7, w / 2, 1.1, d / 2], [-w / 2, 0, -d / 2, w / 2, 2.2, -d / 2 + 0.3]] },
+  champagneTower: { size: [1.0, 1.55, 1.0] },
+  balloonArch: { size: [4.4, 3.4, 0.6], solid: false },
+  redCarpet: { size: [1.8, 1.0, 8], solid: false },
+  valetStand: { size: [0.7, 1.3, 0.6] },
+  ledOrb: { size: [0.6, 0.6, 0.6], solid: false },
+  discoBall: { size: [0.6, 1.5, 0.6], solid: false },
 } satisfies Record<string, FurnitureSpec>;
 
 export type FurnitureType = keyof typeof FURNITURE;

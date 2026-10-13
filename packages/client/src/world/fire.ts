@@ -80,7 +80,7 @@ const FLAME_FRAG = /* glsl */ `
     float n2 = fbm(vec2(vUv.x * 5.0 - vSeed * 5.0, y * 4.0 - time * (4.0 + gas * 2.0)));
     // Teardrop that narrows to a tip and licks sideways more the higher it goes.
     float x = (vUv.x - 0.5) * 2.0 + (n - 0.5) * 1.1 * y;
-    float width = mix(0.9, 0.08, pow(y, 1.3));
+    float width = mix(0.9, 0.08, pow(clamp(y, 0.0, 1.0), 1.3));
     float body = 1.0 - smoothstep(width * 0.25, width, abs(x));
     // Ragged top: the tongue tears off into wisps.
     float top = smoothstep(0.0, 0.3, (1.0 - y) - (n2 - 0.5) * 0.7 - (n - 0.5) * 0.5);

@@ -58,10 +58,32 @@ export class WeaponSystem {
     this.laserBeam.visible = this.laserDot.visible = false;
   }
 
+  /** Puts the gun straight at the hip hold, still (e.g. before it's first shown after a cutscene). */
+  settle(): void {
+    const pistol = this.id === 'pistol' || this.id === 'golden';
+    this.holder.position.copy(pistol ? HIP.pistol : HIP.long);
+    this.holder.rotation.set(0, 0, 0);
+    this.holder.updateMatrix();
+    if (this.arms?.cameraSpace) this.arms.update(this.holder.matrix);
+  }
+
   /** Shows or hides the first-person gun and arms (hidden in menus). */
   setVisible(visible: boolean): void {
     this.holder.visible = visible;
     if (this.arms?.cameraSpace) this.arms.object.visible = visible;
+    if (!visible) this.hideAccessories();
+  }
+
+  /** Laser beam, laser dot and weapon light off (menus, cutscenes, scoped view). */
+  private hideAccessories(): void {
+    this.laserBeam.visible = this.laserDot.visible = false;
+    this.torch.intensity = 0;
+    this.torch.shadow.autoUpdate = false;
+  }
+
+  /** The weapon light is on (it makes you much easier to see). */
+  get lightOn(): boolean {
+    return !!this.def.flashlight && this.flashlightOn && this.holder.visible;
   }
 
   get reloading(): boolean {
@@ -83,6 +105,14 @@ export class WeaponSystem {
     this.mags.clear();
     this.previous = null;
     this.draw(this.inventory[0]);
+  }
+
+  /** Adds a weapon to what you carry (fully loaded) and draws it. */
+  give(id: WeaponId): void {
+    if (!this.inventory.includes(id)) this.inventory.push(id);
+    this.mags.delete(id);
+    this.select(id);
+    this.game.onWeaponChanged(this.id, this.def);
   }
 
   /** Switches to a carried weapon. Its magazine is as you left it. */
@@ -249,6 +279,7 @@ export class WeaponSystem {
     this.flash.scale.setScalar(w.pellets > 1 || w.zoomFov ? 0.3 : 0.2);
     g.gfx.flashLight.intensity = showFlash ? 40 : 4;
     const loud = w.loudness ?? 1;
+    g.actors?.noise(origin, loud < 0.5 ? 7 : 48, 'gunshot');
     g.audio.shot(loud < 0.5 ? { cutoff: w.sound.cutoff * 0.35, decay: w.sound.decay * 0.6 } : w.sound, loud);
     if (this.ammo === 0) this.autoReloadTimer = 0.25;
   }

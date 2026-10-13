@@ -20,6 +20,12 @@ export interface MissionDef {
   briefing: string;
   mapId: MapId;
   loadout: WeaponId[];
+  /** Shown on the loading screen, e.g. "Beverly Hills, California · 21:04". */
+  location?: string;
+  /** Loading screen background (path under public/). */
+  loadingImage?: string;
+  /** Cutscene played before the player takes control (see client/src/cutscenes). */
+  intro?: string;
   objectives: ObjectiveDef[];
   story: StoryBeat[];
 }

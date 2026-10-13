@@ -6,6 +6,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
+<div id="missionLoading">
+  <div id="mlBg"></div>
+  <div class="ml-shade"></div>
+  <div class="ml-content">
+    <div class="ml-kicker" id="mlKicker"></div>
+    <div class="ml-title" id="mlTitle"></div>
+    <div class="ml-location" id="mlLocation"></div>
+    <p class="ml-desc" id="mlDesc"></p>
+  </div>
+  <div class="ml-foot">
+    <div class="ml-tip"><span>TIP</span><span id="mlTip"></span></div>
+    <div class="ml-progress"><div class="ml-bar"><span id="mlFill"></span></div><div class="ml-status" id="mlStatus"></div></div>
+    <div class="ml-continue">Click to continue</div>
+  </div>
+</div>
+<div id="cutscene">
+  <div class="cs-vignette"></div>
+  <div class="cs-bar top"></div><div class="cs-bar bottom"></div>
+  <div id="csTitle"><div id="csHeading"></div><div id="csSub"></div></div>
+  <div id="csSubtitle"></div>
+  <div class="cs-skip"><kbd>Space</kbd> Hold to skip<div class="cs-skip-bar"><span id="csSkipFill"></span></div></div>
+  <div id="csFade"></div>
+</div>
 <div id="hud">
   <div id="scope"></div>
   <div id="underwater"></div>
@@ -16,6 +39,14 @@
   <div id="level" class="panel"><div class="title" id="levelTitle"></div><div id="pips"></div><div id="timer"></div></div>
   <div id="killfeed"></div>
   <div id="banner"></div>
+  <div id="prompt"></div>
+  <div id="mission">
+    <div id="objective"><div id="objTitle"></div><div id="objText"></div><div id="objSub"></div></div>
+    <div id="alarm" class="undetected">UNDETECTED</div>
+    <div id="detect"></div>
+    <div id="waypoint"><div class="wp-diamond"></div><div id="wpLabel"></div></div>
+    <div id="radio"></div>
+  </div>
   <div id="health" class="panel"><div class="label">HEALTH <span id="stance"></span></div><div class="num" id="hpNum">100</div><div class="bar"><div class="fill" id="hpFill"></div></div>
     <div class="bar breath" id="breathBar"><div class="fill" id="breathFill"></div></div></div>
   <div id="wslots"></div>
@@ -25,10 +56,12 @@
 <div id="overlay">
   <div class="screen" id="scr-main">
     <h1 class="logo">GUN<br>GAME</h1>
+    <div class="version" id="version"></div>
     <p class="tagline">Every kill upgrades your weapon. Land a kill with the Golden Gun to win.</p>
     <div class="menu-list">
       <button class="mbtn primary" data-go="modes">Play</button>
       <button class="mbtn" data-go="armory">Armory</button>
+      <button class="mbtn" data-go="character">Character</button>
       <button class="mbtn" data-go="settings">Settings</button>
       <button class="mbtn" data-go="howto">How to Play</button>
       <button class="mbtn" id="quitBtn">Quit</button>
@@ -68,6 +101,7 @@
     <div class="setting"><label for="setSens">Mouse sensitivity</label><output id="outSens"></output><input type="range" id="setSens" min="0.2" max="3" step="0.05"></div>
     <div class="setting"><label for="setFov">Field of view</label><output id="outFov"></output><input type="range" id="setFov" min="60" max="100" step="1"></div>
     <div class="setting"><label for="setVolume">Volume</label><output id="outVolume"></output><input type="range" id="setVolume" min="0" max="1" step="0.05"></div>
+    <div class="setting"><label for="setMusic">Music</label><output id="outMusic"></output><input type="range" id="setMusic" min="0" max="1" step="0.05"></div>
     <div class="setting"><label for="setInvert">Invert mouse Y</label><input type="checkbox" id="setInvert"></div>
     <div class="setting"><label for="setQuality">Graphics quality</label>
       <select id="setQuality"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
@@ -89,6 +123,18 @@
     <button class="mbtn back" data-back>‹ Back</button>
   </div>
 
+  <div class="screen wide" id="scr-character">
+    <h2>CHARACTER</h2>
+    <p class="sub">Your soldier, as security cameras, shadows and cutscenes see him. Changes save automatically.</p>
+    <div class="armory">
+      <div class="armory-left">
+        <div class="preview tall"><canvas id="charCanvas"></canvas><div class="preview-hint">Drag to rotate · scroll to zoom</div><button class="zoom-btn" id="charZoom">Face / Body</button></div>
+      </div>
+      <div class="slots" id="charSlots"></div>
+    </div>
+    <button class="mbtn back" data-back>‹ Back</button>
+  </div>
+
   <div class="screen" id="scr-howto">
     <h2>HOW TO PLAY</h2>
     <p class="sub">Kill bots to climb the weapon ladder. Two kills per weapon, one with the Golden Gun to win. Kills heal you, and health regenerates out of combat.</p>
@@ -105,6 +151,7 @@
       <span><kbd>R</kbd></span><span>Reload</span>
       <span><kbd>1</kbd>-<kbd>9</kbd> <kbd>Wheel</kbd></span><span>Switch weapon (when carrying more than one)</span>
       <span><kbd>Q</kbd></span><span>Swap to last weapon</span>
+      <span><kbd>E</kbd></span><span>Pick up / use</span>
       <span><kbd>F</kbd></span><span>Weapon light on/off</span>
       <span><kbd>Esc</kbd></span><span>Pause</span>
       <span><kbd>V</kbd></span><span>Fly mode (campaign layout preview)</span>
@@ -120,6 +167,7 @@
     <div class="menu-list">
       <button class="mbtn primary" id="resumeBtn">Resume</button>
       <button class="mbtn" data-go="armory">Armory</button>
+      <button class="mbtn" data-go="character">Character</button>
       <button class="mbtn" data-go="settings">Settings</button>
       <button class="mbtn" data-go="howto">How to Play</button>
       <button class="mbtn" id="toMenuBtn">Quit to Main Menu</button>

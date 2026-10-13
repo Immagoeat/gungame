@@ -1,5 +1,6 @@
 import { DIFFICULTIES, GUN_GAME_LADDER, WEAPONS, type DifficultyId } from '@gungame/shared';
 import type { Game } from '../core/Game';
+import { progress } from '../core/progress';
 import { storage } from '../core/storage';
 import { escapeHtml, formatTime } from '../ui/dom';
 import type { GameMode } from './GameMode';
@@ -21,6 +22,15 @@ export class GunGameMode implements GameMode {
 
   private get extraBots(): number {
     return DIFFICULTIES[this.difficulty].extraBots;
+  }
+
+  loadingInfo() {
+    return {
+      kicker: `${DIFFICULTIES[this.difficulty].label} · Arena`,
+      title: 'GUN GAME',
+      description: `Climb the ladder of ${GUN_GAME_LADDER.length} weapons: kills move you up, and one kill with the Golden Gun wins. Kills heal you, and health comes back out of combat.`,
+      image: 'images/loading/arena.jpg',
+    };
   }
 
   start(): void {
@@ -81,11 +91,12 @@ export class GunGameMode implements GameMode {
       storage.set('best', best);
     }
     storage.set('wins', storage.get('wins', 0) + 1);
+    const golden = progress.unlock('golden');
     this.game.audio.arpeggio([523, 659, 784, 1047], 0.12, 0.2);
     this.game.endMatch({
       won: true,
       title: 'VICTORY',
-      subtitle: `You climbed the whole ladder on ${DIFFICULTIES[this.difficulty].label}.${isRecord ? ' New best time!' : ''}`,
+      subtitle: `You climbed the whole ladder on ${DIFFICULTIES[this.difficulty].label}.${isRecord ? ' New best time!' : ''}${golden ? ' Golden Gun unlocked!' : ''}`,
       stats: this.stats(),
     });
   }

@@ -81,6 +81,15 @@ export class Hud {
       `<span class="${i === current ? 'on' : ''}"><kbd>${i + 1}</kbd>${escapeHtml(n)}</span>`).join('');
   }
 
+  /** An interaction prompt under the crosshair ("[E] Pick up SMG"); empty hides it. */
+  prompt(html: string): void {
+    const el = $('prompt');
+    if (el.dataset.html === html) return;
+    el.dataset.html = html;
+    el.innerHTML = html;
+    el.style.opacity = html ? '1' : '0';
+  }
+
   banner(title: string, subtitle: string): void {
     const b = $('banner');
     b.innerHTML = `${escapeHtml(title)}<small>${escapeHtml(subtitle)}</small>`;

@@ -137,9 +137,9 @@ export class Projectiles {
 
     this.ray.set(b.pos, b.dir);
     this.ray.far = best ? best.t + 0.01 : maxT;
-    const targets = [...this.game.bots.hitTargets(), ...world.security.hitTargets(), ...world.lights.hitTargets()];
+    const targets = [...this.game.bots.hitTargets(), ...world.security.hitTargets(), ...world.lights.hitTargets(), ...(this.game.actors?.hitTargets() ?? [])];
     for (const h of this.ray.intersectObjects(targets, false)) {
-      const owner = h.object.userData.bot ?? h.object.userData.securityCam ?? h.object.userData.lightFixture;
+      const owner = h.object.userData.bot ?? h.object.userData.securityCam ?? h.object.userData.lightFixture ?? h.object.userData.guard ?? h.object.userData.hostage;
       if (b.hit.has(owner)) continue;
       if (!best || h.distance < best.t) best = { kind: 'object', t: h.distance, object: h.object, point: h.point };
       break;
@@ -176,6 +176,22 @@ export class Projectiles {
         b.pos.addScaledVector(b.dir, head ? 0.25 : 0.45);
         return b.speed > 0;
       }
+      if ((ud.guard || ud.hostage) && g.actors) {
+        const who = ud.guard ?? ud.hostage;
+        b.hit.add(who);
+        const head = ud.head === true;
+        const dmg = b.weapon.damage * damageScale(b.speed, b.weapon.muzzleVelocity) * (head ? b.weapon.headshotMultiplier : 1);
+        const from = b.origin.clone();
+        const killed = g.actors.hit(ev.object, dmg, head, from);
+        if (ud.guard) {
+          g.hud.hitmarker(killed);
+          g.audio.beep(killed ? 1400 : 1900, 0.05, 'triangle', 0.08);
+        }
+        g.fx.impact(ev.point, b.dir.clone().negate(), 'flesh', head ? 8 : 5);
+        b.speed = exitSpeed(b.speed, FLESH_RESISTANCE, head ? 0.18 : FLESH_THICKNESS);
+        b.pos.addScaledVector(b.dir, head ? 0.25 : 0.45);
+        return b.speed > 0;
+      }
       if (ud.securityCam) {
         b.hit.add(ud.securityCam);
         g.destroyCamera(ud.securityCam, ev.point, b.dir);
@@ -195,8 +211,10 @@ export class Projectiles {
       return true;
     }
 
-    // A solid block: glass, a wall layer, furniture...
+    // A solid block: glass, a wall layer, furniture... or a party guest.
+    if (g.world.party.isGuestBox(ev.box)) g.actors?.civilianHit(b.pos.clone());
     const info = g.world.colliderInfo.get(ev.box);
+    if (info && !info.invisible) g.actors?.noise(b.pos, 3, 'impact');
     const thickness = Math.max(0.005, ev.hit.tOut - ev.hit.tIn);
     const pane = g.world.glass.byBox.get(ev.box);
     if (pane) {

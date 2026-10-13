@@ -48,6 +48,8 @@ export interface Mover extends Body {
   submerged: number;
   /** Height of the water surface the body is in, or -Infinity. */
   waterLevel: number;
+  /** Optional multiplier on walking speed (dragging something heavy). */
+  speedMul?: number;
 }
 
 export const hasButton = (buttons: number, b: number) => (buttons & b) !== 0;
@@ -108,7 +110,7 @@ export function stepMovement(body: Mover, input: MoveInput, dt: number, collider
   const speed = body.swimming
     ? SWIM_SPEED * (hasButton(b, Buttons.Sprint) ? 1.5 : 1)
     : (hasButton(b, Buttons.Aim) ? MOVE_SPEED.aim : isSprinting(b) && body.stance === 'stand' ? MOVE_SPEED.sprint : MOVE_SPEED.walk)
-      * STANCES[body.stance].speed * (wading ? 0.6 : 1);
+      * STANCES[body.stance].speed * (wading ? 0.6 : 1) * (body.speedMul ?? 1);
   const f = (hasButton(b, Buttons.Forward) ? 1 : 0) - (hasButton(b, Buttons.Back) ? 1 : 0);
   const s = (hasButton(b, Buttons.Right) ? 1 : 0) - (hasButton(b, Buttons.Left) ? 1 : 0);
   const sin = Math.sin(input.yaw);

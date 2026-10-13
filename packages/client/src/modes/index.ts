@@ -12,7 +12,7 @@ export function createMode(game: Game, options: MatchOptions): GameMode {
     case 'campaign': {
       const mission = getMission(options.missionId ?? '');
       if (!mission) throw new Error(`Unknown mission "${options.missionId}"`);
-      return new CampaignMode(game, mission);
+      return new CampaignMode(game, mission, options);
     }
     case 'multiplayer':
       throw new Error('Multiplayer is not implemented yet');

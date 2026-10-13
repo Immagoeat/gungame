@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
-  applyAttachments, attachmentsFor, getAttachment, SLOT_NAMES, WEAPON_SLOTS, WEAPONS,
+  applyAttachments, attachmentsFor, getAttachment, SLOT_NAMES, WEAPON_SLOTS, WEAPON_UNLOCKS, WEAPONS,
   type Slot, type WeaponDef, type WeaponId,
 } from '@gungame/shared';
 import type { Game } from '../core/Game';
 import { loadouts } from '../core/loadouts';
+import { progress } from '../core/progress';
 import { buildGun, type GunModel } from '../weapons/gunModels';
 import { $, escapeHtml } from './dom';
 
-const WEAPON_ORDER: WeaponId[] = ['pistol', 'smg', 'shotgun', 'rifle', 'sniper', 'golden'];
+const WEAPON_ORDER: WeaponId[] = ['rifle', 'pistol', 'smg', 'shotgun', 'sniper', 'golden'];
+/** Locked guns show as a dark silhouette. */
+const lockedMaterial = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.9, metalness: 0 });
 
 /** Stat bars: label, value from a weapon (0..1, higher is better), formatted raw value. */
 const STATS: [string, (w: WeaponDef) => number, (w: WeaponDef) => string][] = [
@@ -122,8 +125,11 @@ export class Armory {
     this.gun.group.rotation.y = 0;
     this.turntable.add(this.gun.group);
 
-    $('weaponTabs').innerHTML = WEAPON_ORDER.map(id =>
-      `<button class="tab${id === this.weapon ? ' active' : ''}" data-weapon="${id}">${escapeHtml(WEAPONS[id].name)}</button>`).join('');
+    const unlocked = progress.unlocked();
+    $('weaponTabs').innerHTML = WEAPON_ORDER.map(id => {
+      const locked = !unlocked.includes(id);
+      return `<button class="tab${id === this.weapon ? ' active' : ''}${locked ? ' locked' : ''}" data-weapon="${id}" title="${locked ? escapeHtml(WEAPON_UNLOCKS[id].how) : ''}">${locked ? '🔒 ' : ''}${escapeHtml(WEAPONS[id].name)}</button>`;
+    }).join('');
     $('weaponTabs').querySelectorAll<HTMLButtonElement>('[data-weapon]').forEach(b => b.addEventListener('click', () => {
       this.weapon = b.dataset.weapon as WeaponId;
       this.openSlot = null;
@@ -142,6 +148,12 @@ export class Armory {
         <span class="val ${cls}">${fmt(def)}</span></div>`;
     }).join('');
 
+    if (!unlocked.includes(this.weapon)) {
+      // Locked: show the gun and how to get it, but no customizing yet.
+      $('armorySlots').innerHTML = `<div class="locked-note"><b>Locked</b><p>${escapeHtml(WEAPON_UNLOCKS[this.weapon].how)}</p></div>`;
+      this.gun.group.traverse(o => { if (o instanceof THREE.Mesh) o.material = lockedMaterial; });
+      return;
+    }
     $('armorySlots').innerHTML = WEAPON_SLOTS[this.weapon].map(slot => {
       const current = getAttachment(loadout[slot]);
       const open = this.openSlot === slot;

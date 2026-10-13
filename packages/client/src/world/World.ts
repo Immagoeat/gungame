@@ -1,7 +1,11 @@
 import * as THREE from 'three';
+import { ambience } from './beams';
+import { PartySystem } from './PartySystem';
+import { PickupSystem } from './PickupSystem';
+import { DoorSystem } from './DoorSystem';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  blockToAABB, footprintBlocked, isSeeThrough, isSolid, mapWater, PENETRATION_RESISTANCE, zoneAt,
+  blockToAABB, footprintBlocked, NavGrid, isSeeThrough, isSolid, mapWater, PENETRATION_RESISTANCE, zoneAt,
   type AABB, type Block, type BlockMaterial, type MapDef, type PropDef, type Vec3, type ZoneDef,
 } from '@gungame/shared';
 import { batchFurniture, type FurnitureBatch } from './furniture';
@@ -34,6 +38,10 @@ export class World {
   readonly security: SecuritySystem;
   readonly glass: GlassSystem;
   readonly lights: LightSystem;
+  readonly party: PartySystem;
+  readonly pickups: PickupSystem;
+  readonly doors: DoorSystem;
+  private navGrid: NavGrid | null = null;
   private readonly furniture: FurnitureBatch;
   private time = 0;
   private readonly ray = new THREE.Raycaster();
@@ -61,19 +69,70 @@ export class World {
     this.buildProps(map.props);
     this.security = new SecuritySystem(this.root, map.props);
     this.lights = new LightSystem(this.root, map.props);
+    this.party = new PartySystem(this.root, map.props, this.colliders, this.colliderInfo);
+    this.pickups = new PickupSystem(this.root, map.props);
+    this.doors = new DoorSystem(this.root, map.props, this.colliders, this.colliderInfo, this.occluders);
     scene.add(this.root);
   }
 
   /** @param night 0 = day, 1 = full night (see Graphics.night) */
-  update(dt: number, night: number): void {
+  update(dt: number, night: number, camera?: THREE.Vector3): void {
     this.time += dt;
+    ambience.night = night;
     this.security.update(dt);
     this.lights.update(dt, night);
+    this.party.update(dt, this.time, camera);
+    this.pickups.update(this.time);
+    this.doors.update(dt);
     for (const d of this.furniture.dynamics) d.update(dt, this.time);
     for (const s of scrollingTextures) {
       s.texture.offset.x = (s.texture.offset.x + s.speed[0] * dt) % 1;
       s.texture.offset.y = (s.texture.offset.y + s.speed[1] * dt) % 1;
     }
+  }
+
+  /**
+   * Walkable-space graph for AI, built the first time something asks (from the map's static blocks:
+   * doors, guests and parked vehicles aren't in it; NPCs open doors and steer round people).
+   */
+  get nav(): NavGrid {
+    if (!this.navGrid) {
+      const h = this.map.halfSize;
+      const statics = this.map.blocks.filter(b => isSolid(b.material)).map(blockToAABB);
+      this.navGrid = new NavGrid(statics, { bounds: { minX: -h - 5, maxX: h + 5, minZ: -h - 5, maxZ: h + 13 }, water: this.water });
+    }
+    return this.navGrid;
+  }
+
+  /**
+   * Fast sight line against the collision boxes (not triangles): glass and people don't block it;
+   * walls, floors, doors, cars and furniture do.
+   */
+  clearLine(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 1e-4) return true;
+    const ix = len / (dx || 1e-12), iy = len / (dy || 1e-12), iz = len / (dz || 1e-12);
+    for (const b of this.colliders) {
+      // Slab test on the segment (0..len).
+      let t0 = 0, t1 = len;
+      let a = (b.min.x - from.x) * ix, c = (b.max.x - from.x) * ix;
+      if (a > c) [a, c] = [c, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      if (t0 > t1) continue;
+      a = (b.min.y - from.y) * iy; c = (b.max.y - from.y) * iy;
+      if (a > c) [a, c] = [c, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      if (t0 > t1) continue;
+      a = (b.min.z - from.z) * iz; c = (b.max.z - from.z) * iz;
+      if (a > c) [a, c] = [c, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      if (t0 > t1) continue;
+      const info = this.colliderInfo.get(b);
+      if (info?.material === 'glass' || this.party.isGuestBox(b)) continue;
+      return false;
+    }
+    return true;
   }
 
   hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
@@ -118,6 +177,9 @@ export class World {
     this.security.dispose();
     this.glass.dispose();
     this.lights.dispose();
+    this.party.dispose();
+    this.pickups.dispose();
+    this.doors.dispose();
     this.furniture.dispose();
     for (const d of this.disposables) d.dispose();
   }

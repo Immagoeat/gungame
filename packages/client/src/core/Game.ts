@@ -5,7 +5,7 @@ import {
 import { BotManager } from '../entities/BotManager';
 import type { Bot } from '../entities/Bot';
 import { BREATH_SECONDS, Player } from '../entities/Player';
-import { createAvatar } from '../entities/avatar';
+import { createAvatar, type AvatarState } from '../entities/avatar';
 import { Debris } from '../fx/Debris';
 import { Effects } from '../fx/Effects';
 import { WaterFx } from '../fx/WaterFx';
@@ -17,20 +17,29 @@ import { Projectiles } from '../weapons/Projectiles';
 import { WeaponSystem } from '../weapons/WeaponSystem';
 import type { GlassPane } from '../world/GlassSystem';
 import type { LightFixture } from '../world/LightSystem';
-import { LAYER_EFFECTS, LAYER_SHADOW_PROXY } from './layers';
+import { LAYER_CCTV_ONLY, LAYER_EFFECTS, LAYER_SHADOW_PROXY } from './layers';
+import type { Cutscene } from '../cutscenes/Cutscene';
+import { CutsceneOverlay } from '../ui/CutsceneOverlay';
+import { LoadingScreen } from '../ui/LoadingScreen';
+import type { WorldActors } from './actors';
+import type { PartyMusic } from '../audio/PartyMusic';
 import { LAYER_SCREENS, type SecurityCam } from '../world/SecuritySystem';
+import { PartySystem } from '../world/PartySystem';
 import { World } from '../world/World';
 import { AudioSystem } from './Audio';
 import { Graphics } from './Graphics';
 import { Input } from './Input';
 import { loadSettings } from './Settings';
+import { progress } from './progress';
 
 /**
  * - menu: main menu with the arena orbiting behind it
+ * - loading: building a match behind the loading screen
  * - starting: match set up, waiting for pointer lock
+ * - cutscene: a scripted intro is playing (Space, Enter or a click skips it)
  * - playing / paused / over: in a match
  */
-export type GameState = 'menu' | 'starting' | 'playing' | 'paused' | 'over';
+export type GameState = 'menu' | 'loading' | 'starting' | 'cutscene' | 'playing' | 'paused' | 'over';
 
 const BASE_SENSITIVITY = 0.0022;
 const REGEN_DELAY = 4;
@@ -39,6 +48,8 @@ const KILL_HEAL = 15;
 const MENU_BACKDROP_BOTS = 7;
 const MENU_MAP: MapId = 'arena';
 const FLY_SPEED = 10;
+/** Seconds to hold Space to skip a cutscene. */
+const SKIP_HOLD = 0.9;
 
 /** The engine: owns every system and the state machine. Rules live in the active GameMode. */
 export class Game {
@@ -48,7 +59,7 @@ export class Game {
   readonly input: Input;
   world: World;
   readonly player = new Player();
-  private readonly avatar = createAvatar();
+  private avatar = createAvatar();
   /** Noclip flight for reviewing layouts (only in modes that allow it). */
   flying = false;
   readonly fx: Effects;
@@ -70,11 +81,32 @@ export class Game {
   private options: MatchOptions = { mode: 'gungame', difficulty: 'normal' };
   private readonly clock = new THREE.Clock();
   private menuTime = 0;
+  private cutscene: Cutscene | null = null;
+  private pickupTarget: { weapon: WeaponId; name: string } | null = null;
+  /** Guards, hostages etc. the active mission put in the world. */
+  actors: WorldActors | null = null;
+  private stepTimer = 0;
+  /** Music playing from a point in the world (the party's DJ booth), and where it comes from. */
+  private music: PartyMusic | null = null;
+  private readonly musicSource = new THREE.Vector3();
+  private musicBlocked = false;
+  private musicCheck = 0;
+  private cutsceneActor: AvatarState | null = null;
+  private cutsceneFirstPerson = false;
+  private cutsceneTime = 0;
+  private readonly cutsceneUi = new CutsceneOverlay();
+  /** How long the skip key has been held during a cutscene. */
+  private skipHold = 0;
+  private readonly loadingUi = new LoadingScreen();
+  /** Bumped by every new load (and by quitting), so a superseded load stops where it is. */
+  private loadToken = 0;
+  private ambience: { set(level: number): void; stop(): void } | null = null;
   private tinkleBudget = 0;
 
   constructor(container: HTMLElement) {
     this.gfx = new Graphics(container, this.settings.quality);
     this.audio = new AudioSystem(this.settings.volume);
+    this.audio.setMusicVolume(this.settings.music);
     this.input = new Input(this.gfx.canvas);
     this.world = new World(createMap(MENU_MAP), this.gfx.scene);
     this.gfx.prepare(this.gfx.scene);
@@ -105,6 +137,7 @@ export class Game {
       if (code === 'KeyF') this.weapons.toggleFlashlight();
       if (/^Digit[1-9]$/.test(code)) this.weapons.selectSlot(Number(code.slice(5)) - 1);
       if (code === 'KeyQ') this.weapons.swapToPrevious();
+      if (code === 'KeyE') this.interact();
       this.onStanceKey(code);
       if (code === 'KeyV' && this.mode?.allowFly) this.toggleFly();
       if ((code === 'BracketLeft' || code === 'BracketRight') && this.mode?.allowFly) {
@@ -124,6 +157,8 @@ export class Game {
 
   boot(): void {
     this.goToMainMenu();
+    // Build the party guests' bodies in the background while the menu is up.
+    PartySystem.prewarm(createMap('mansion').props);
     this.gfx.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -133,13 +168,36 @@ export class Game {
     return this.options.difficulty;
   }
 
-  startMatch(options: MatchOptions): void {
+  /**
+   * Loads and starts a match behind the loading screen: builds the map, sets up the mode and its
+   * intro, compiles shaders and renders a warm-up frame, then waits for a click (which also captures
+   * the mouse) before starting.
+   */
+  async startMatch(options: MatchOptions): Promise<void> {
+    const token = ++this.loadToken;
     this.audio.init();
+    this.endCutscene(false);
+    this.stopAmbience();
     this.mode?.dispose();
     this.options = options;
     const mode = createMode(this, options);
     this.mode = mode;
-    this.loadMap(mode.mapId, true); // fresh copy: broken glass and cameras come back
+    this.state = 'loading';
+    this.input.unlock();
+    this.input.clearActions();
+    this.menu.hide();
+    this.hud.hide();
+    this.weapons.setVisible(false);
+    this.loadingUi.show(mode.loadingInfo?.() ?? { kicker: '', title: 'LOADING', description: '' });
+    const paint = () => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    const cancelled = () => token !== this.loadToken;
+    await paint();
+    if (cancelled()) return;
+
+    this.loadingUi.progress(0.08, 'Building the world');
+    await paint();
+    this.loadMap(mode.mapId, true, false); // fresh copy: broken glass and cameras come back
+    if (cancelled()) return;
     this.bots.clear();
     this.fx.clear();
     this.hud.reset();
@@ -153,10 +211,41 @@ export class Game {
     this.flying = false;
     this.elapsed = 0;
     this.gfx.setFov(this.settings.fov);
-    this.weapons.setVisible(true);
+
+    this.loadingUi.progress(0.45, 'Setting the scene');
+    await paint();
     mode.start();
-    this.state = 'starting';
+    this.weapons.setVisible(false);
+    const intro = mode.intro?.() ?? null;
+    if (cancelled()) { intro?.dispose(); return; }
+
+    this.loadingUi.progress(0.6, 'Compiling shaders');
+    await paint();
+    await this.gfx.compileScene();
+    if (cancelled()) { intro?.dispose(); return; }
+
+    // Warm-up: render the opening shot once behind the loading screen, so shadows, lights and any
+    // remaining shaders are ready before anything is shown.
+    this.loadingUi.progress(0.9, 'Lighting');
+    await paint();
+    if (intro) this.previewCutscene(intro);
+    else this.placeCamera();
+    this.world.update(0, this.gfx.night);
+    this.gfx.render();
+    if (cancelled()) { intro?.dispose(); return; }
+
+    this.loadingUi.progress(1, 'Ready');
+    await this.loadingUi.waitForContinue();
+    if (cancelled()) { intro?.dispose(); return; }
+    this.loadingUi.hide();
+    this.startAmbience();
     this.input.lock();
+    this.clock.getDelta();
+    if (intro) this.beginCutscene(intro);
+    else {
+      this.weapons.setVisible(true);
+      this.state = 'starting';
+    }
   }
 
   restartMatch(): void {
@@ -168,6 +257,10 @@ export class Game {
   }
 
   goToMainMenu(): void {
+    this.loadToken++;
+    this.loadingUi.cancel();
+    this.endCutscene(false);
+    this.stopAmbience();
     this.mode?.dispose();
     this.mode = null;
     this.state = 'menu';
@@ -184,6 +277,17 @@ export class Game {
     this.menu.showMain();
   }
 
+  /** What "retry" restarts from (a mission checkpoint), or undefined for the start. */
+  setCheckpoint(checkpoint: unknown): void {
+    this.options = { ...this.options, checkpoint };
+  }
+
+  /** Stops the party music (when the party breaks up). */
+  stopMusic(): void {
+    this.music?.stop();
+    this.music = null;
+  }
+
   /** Called by the active mode when the match is decided. */
   endMatch(result: MatchResult): void {
     this.state = 'over';
@@ -193,7 +297,7 @@ export class Game {
     this.menu.showResults(result);
   }
 
-  private loadMap(id: MapId, force = false): void {
+  private loadMap(id: MapId, force = false, compile = true): void {
     if (!force && this.world.map.id === id) return;
     this.projectiles.clear();
     this.bots.clear();
@@ -201,7 +305,7 @@ export class Game {
     this.debris.clear();
     this.world.dispose();
     this.world = new World(createMap(id), this.gfx.scene);
-    this.gfx.prepare(this.world.root);
+    this.gfx.prepare(this.world.root, compile);
   }
 
   /** C toggles crouch, Z toggles prone, Space or sprint stands back up. */
@@ -222,6 +326,164 @@ export class Game {
     this.hud.banner(this.flying ? 'Fly mode' : 'Walking', this.flying ? 'Space up · Q down · Shift fast' : '');
   }
 
+  /** E: pick up the weapon you're looking at. Finding a weapon unlocks it for good. */
+  private interact(): void {
+    if (this.mode?.interact?.()) return;
+    const t = this.pickupTarget;
+    if (!t) return;
+    this.world.pickups.take(t.weapon);
+    this.pickupTarget = null;
+    this.hud.prompt('');
+    this.weapons.give(t.weapon);
+    this.audio.pickup();
+    const fresh = progress.unlock(t.weapon);
+    this.hud.banner(t.name, fresh ? 'Unlocked: now available in the Armory' : 'Picked up');
+  }
+
+  // ---------- Music ----------
+
+  /** Party music if the map has a DJ booth, and night ambience after dark. */
+  private startAmbience(): void {
+    this.stopAmbience();
+    const booth = this.world.map.props.find(p => p.kind === 'furniture' && p.type === 'djBooth');
+    if (booth) {
+      this.musicSource.set(booth.x, booth.y + 1.6, booth.z);
+      this.music = this.audio.partyMusic();
+      this.musicCheck = 0;
+    }
+    if (this.gfx.night > 0.5) this.ambience = this.audio.nightAmbience();
+  }
+
+  private stopAmbience(): void {
+    this.music?.stop();
+    this.music = null;
+    this.ambience?.stop();
+    this.ambience = null;
+  }
+
+  /** Volume, panning and muffling from where the camera is relative to the speakers. */
+  private updateMusic(dt: number): void {
+    if (!this.music) {
+      this.ambience?.set(this.state === 'paused' ? 0.2 : 0.5);
+      return;
+    }
+    const music = this.music;
+    const cam = this.gfx.camera;
+    const to = this.musicSource.clone().sub(cam.position);
+    const distance = to.length();
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+    const side = distance > 0.01 ? to.normalize().dot(right) : 0;
+    // Line of sight is a raycast, so check it a few times a second.
+    this.musicCheck -= dt;
+    if (this.musicCheck <= 0) {
+      this.musicCheck = 0.2;
+      this.musicBlocked = !this.world.hasLineOfSight(cam.position, this.musicSource);
+    }
+    const away = this.state === 'paused' || this.state === 'over';
+    music.setListener(distance, side, this.musicBlocked, away);
+    // Crickets outside; faint indoors.
+    const zone = this.world.zoneAt({ x: cam.position.x, y: cam.position.y, z: cam.position.z });
+    const outdoors = !zone || /grounds|roof/i.test(zone.floor) || /terrace|balcony/i.test(zone.name);
+    this.ambience?.set((outdoors ? 0.55 : 0.12) * (away ? 0.4 : 1));
+  }
+
+  // ---------- Cutscenes ----------
+
+  private beginCutscene(scene: Cutscene): void {
+    this.cutscene = scene;
+    this.cutsceneTime = 0;
+    this.skipHold = 0;
+    this.cutsceneFirstPerson = false;
+    this.state = 'cutscene';
+    this.menu.hide();
+    this.hud.hide();
+    this.weapons.setVisible(false);
+    // The player's body is normally only seen by security cameras; here it's the star.
+    this.gfx.camera.layers.enable(LAYER_CCTV_ONLY);
+    this.cutsceneUi.show();
+  }
+
+  private skipCutscene(): void {
+    if (this.cutscene) this.cutsceneTime = this.cutscene.duration;
+    this.input.jumpBlocked = true; // the Space that skipped mustn't also jump
+  }
+
+  /** Poses the world at the start of a cutscene without starting it (for the loading warm-up). */
+  private previewCutscene(scene: Cutscene): void {
+    const f = scene.update(0, 0);
+    const cam = this.gfx.camera;
+    cam.position.copy(f.camera.position);
+    cam.lookAt(f.camera.target);
+    this.gfx.setFov(f.camera.fov);
+    this.gfx.camera.layers.enable(LAYER_CCTV_ONLY);
+    if (f.actor) this.avatar.update(0, f.actor);
+  }
+
+  /** First-person camera at the player's eyes. */
+  private placeCamera(): void {
+    const p = this.player;
+    this.gfx.camera.position.set(p.pos.x, p.pos.y + p.eyeHeight, p.pos.z);
+    this.gfx.camera.rotation.set(p.pitch, p.yaw, 0);
+  }
+
+  private updateCutscene(dt: number): void {
+    const scene = this.cutscene!;
+    // Hold Space or Enter to skip (a tap won't skip by accident).
+    const held = this.input.isDown('Space') || this.input.isDown('Enter') || this.input.isDown('NumpadEnter');
+    this.skipHold = held ? this.skipHold + dt : Math.max(0, this.skipHold - dt * 3);
+    this.cutsceneUi.setSkip(this.skipHold / SKIP_HOLD);
+    if (this.skipHold >= SKIP_HOLD) {
+      this.skipHold = 0;
+      this.skipCutscene();
+    }
+    this.input.wantFire = false;
+    this.cutsceneTime = Math.min(scene.duration, this.cutsceneTime + dt);
+    const f = scene.update(dt, this.cutsceneTime);
+    const cam = this.gfx.camera;
+    cam.position.copy(f.camera.position);
+    cam.lookAt(f.camera.target);
+    this.gfx.setFov(f.camera.fov);
+    this.cutsceneUi.update(f);
+    this.cutsceneActor = f.actor;
+    // The last beat of an intro can be through your own eyes, gun in hand.
+    if (f.firstPerson !== this.cutsceneFirstPerson) {
+      this.cutsceneFirstPerson = !!f.firstPerson;
+      if (this.cutsceneFirstPerson) this.weapons.settle();
+      this.weapons.setVisible(this.cutsceneFirstPerson);
+    }
+    if (this.cutsceneTime >= scene.duration) this.endCutscene(true);
+  }
+
+  /** Hands control to the player where the scene left them (or just tears it down). */
+  private endCutscene(handOver: boolean): void {
+    const scene = this.cutscene;
+    if (!scene) return;
+    this.cutscene = null;
+    this.cutsceneActor = null;
+    this.gfx.camera.layers.disable(LAYER_CCTV_ONLY);
+    this.cutsceneUi.hide();
+    if (!handOver) return;
+    scene.finish();
+    const p = this.player;
+    p.pos.copy(scene.end.pos);
+    p.vel.set(0, 0, 0);
+    p.yaw = scene.end.yaw;
+    p.pitch = scene.end.pitch;
+    this.gfx.setFov(this.settings.fov);
+    this.weapons.setVisible(true);
+    this.input.clearActions();
+    this.clock.getDelta();
+    this.mode?.onIntroDone?.();
+    if (this.input.locked) {
+      this.state = 'playing';
+      this.hud.show();
+    } else {
+      // Pointer lock was refused or released: ask for a click to start.
+      this.state = 'starting';
+      this.pause();
+    }
+  }
+
   private pause(): void {
     this.state = 'paused';
     this.input.clearActions();
@@ -230,11 +492,17 @@ export class Game {
 
   private onPointerLockChange(locked: boolean): void {
     if (locked && (this.state === 'starting' || this.state === 'paused')) {
-      this.state = 'playing';
       this.menu.hide();
-      this.hud.show();
       this.clock.getDelta(); // don't count time spent in menus
-    } else if (!locked && this.state === 'playing') {
+      if (this.cutscene) {
+        this.state = 'cutscene';
+        this.cutsceneUi.show();
+        return;
+      }
+      this.state = 'playing';
+      this.hud.show();
+    } else if (!locked && (this.state === 'playing' || this.state === 'cutscene')) {
+      if (this.cutscene) this.cutsceneUi.hide();
       this.pause();
     }
   }
@@ -269,6 +537,7 @@ export class Game {
     this.debris.fracture(shape, point, dir);
     this.fx.impact(point, dir, 'glass', 22);
     this.audio.glassBreak(shape.width * shape.height);
+    this.actors?.noise(point, 18, 'glass');
   }
 
   /** Shoots out a light fixture: sparks, falling glass, and the light flickers and dies. */
@@ -298,6 +567,14 @@ export class Game {
     this.audio.zap();
   }
 
+  /** The player changed their character's look: rebuild the body and the first-person arms. */
+  onLookChanged(): void {
+    this.gfx.scene.remove(this.avatar.group);
+    this.avatar = createAvatar();
+    this.gfx.scene.add(this.avatar.group);
+    this.weapons.refreshLoadout();
+  }
+
   /** The equipped weapon (or its attachments) changed: the body holds the same gun. */
   onWeaponChanged(id: WeaponId, def: WeaponDef): void {
     this.avatar?.setWeapon(id, def.loadout ?? {});
@@ -316,22 +593,38 @@ export class Game {
 
   private frame(): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    // The loading screen covers everything; the loader renders its own warm-up frame.
+    if (this.state === 'loading') return;
     if (this.state === 'playing') this.update(dt);
+    else if (this.state === 'cutscene') { this.updateCutscene(dt); this.mode?.scenery?.(dt); }
     else if (this.state === 'menu') this.updateMenuBackdrop(dt);
-    if (this.state === 'playing' || this.state === 'menu') {
-      this.world.update(dt, this.gfx.night);
+    if (this.state === 'playing' || this.state === 'menu' || this.state === 'cutscene') {
+      this.world.update(dt, this.gfx.night, this.gfx.camera.position);
       this.tinkleBudget = Math.min(6, this.tinkleBudget + dt * 20);
       this.debris.update(dt);
       this.waterFx.update(dt);
     }
     const p = this.player;
-    this.avatar.group.visible = this.state !== 'menu' && !this.flying;
-    this.avatar.update(dt, {
-      pos: p.pos, yaw: p.yaw, pitch: p.pitch, stance: p.stance, eyeHeight: p.eyeHeight, speed: p.horizontalSpeed,
-      forward: -Math.sin(p.yaw) * p.vel.x - Math.cos(p.yaw) * p.vel.z,
-      swimming: p.swimming, onGround: p.onGround, aiming: this.input.aiming,
-      gunOffset: this.weapons.holder.position, gunRotation: this.weapons.holder.quaternion,
-    });
+    if (this.cutscene) {
+      // The scene drives the body (hidden while it's out of shot).
+      this.avatar.group.visible = !!this.cutsceneActor;
+      if (this.cutsceneActor) this.avatar.update(dt, this.cutsceneActor);
+    } else {
+      this.avatar.group.visible = this.state !== 'menu' && !this.flying;
+      this.avatar.update(dt, {
+        pos: p.pos, yaw: p.yaw, pitch: p.pitch, stance: p.stance, eyeHeight: p.eyeHeight, speed: p.horizontalSpeed,
+        forward: -Math.sin(p.yaw) * p.vel.x - Math.cos(p.yaw) * p.vel.z,
+        swimming: p.swimming, onGround: p.onGround, aiming: this.input.aiming,
+        gunOffset: this.weapons.holder.position, gunRotation: this.weapons.holder.quaternion,
+      });
+    }
+    this.updateMusic(dt);
+    {
+      const c = this.gfx.camera;
+      const r = new THREE.Vector3(1, 0, 0).applyQuaternion(c.quaternion);
+      Object.assign(this.audio.listener.pos, { x: c.position.x, y: c.position.y, z: c.position.z });
+      Object.assign(this.audio.listener.right, { x: r.x, y: r.y, z: r.z });
+    }
     if (this.state === 'playing') this.world.security.renderFeeds(this.gfx.renderer, this.gfx.scene, this.gfx.camera.position);
     this.gfx.render();
   }
@@ -371,6 +664,19 @@ export class Game {
     this.projectiles.update(dt);
     if (this.state !== 'playing') return; // a bullet may have ended the match
     this.mode?.update(dt);
+    // What you're looking at that you can use.
+    const look = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    this.pickupTarget = this.world.pickups.target(cam.position, look);
+    const modePrompt = this.mode?.prompt?.() ?? null;
+    this.hud.prompt(modePrompt ?? (this.pickupTarget ? `<kbd>E</kbd>Pick up ${escapeHtml(this.pickupTarget.name)}` : ''));
+    // Footsteps carry: sprinting is loud, walking is quiet, crouching and crawling are silent.
+    if (p.onGround && p.horizontalSpeed > 1 && p.stance === 'stand') {
+      this.stepTimer -= dt;
+      if (this.stepTimer <= 0) {
+        this.stepTimer = 0.45;
+        this.actors?.noise(new THREE.Vector3(p.pos.x, p.pos.y + 0.2, p.pos.z), sprinting ? 8 : 2.5, 'footsteps');
+      }
+    }
     this.bots.update(dt, true);
     this.fx.update(dt);
     this.hud.update(dt, {
