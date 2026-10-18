@@ -5,12 +5,14 @@ import { indoor } from './indoor';
 import { Kit, type Dynamic } from './kit';
 import { outdoor } from './outdoor';
 import { party } from './party';
+import { port } from './port';
+import { ship } from './ship';
 import { special } from './special';
 import type { Builder } from './types';
 
 type FurnitureProp = Extract<PropDef, { kind: 'furniture' }>;
 
-const BUILDERS = { ...indoor, ...special, ...outdoor, ...party } as Record<FurnitureType, Builder | undefined>;
+const BUILDERS = { ...indoor, ...special, ...outdoor, ...party, ...ship, ...port } as Record<FurnitureType, Builder | undefined>;
 
 export function buildFurniture(prop: FurnitureProp): Kit {
   const [w, h, d] = FURNITURE[prop.type].size;

@@ -1,6 +1,6 @@
 import { doorway, glazing, MapBuilder, rect, type FurnitureOptions, type Opening, type Rect, type WallMaterial } from './builder';
 import type { Facing, FurnitureType } from './furniture';
-import type { BlockMaterial, GuestActivity, MapDef, PropDef } from './types';
+import type { BlockMaterial, ClueModel, GuestActivity, MapDef, PropDef } from './types';
 
 /**
  * "The Mansion": a Beverly Hills estate.
@@ -37,6 +37,20 @@ const EXT = 0.4;
 const HOUSE = rect(HX0 - 0.2, HZ0 - 0.2, HX1 + 0.2, HZ1 + 0.2);
 const GARAGE = rect(22.2, -10.2, 36.2, 6.2);
 const POOL = rect(-10, -36, 10, -28);
+/** Where the neighbours' driveways meet the street across from the estate (x); the client puts their houses behind. */
+export const NEIGHBOR_DRIVES = [-128, -82, -36, 30, 76, 122];
+/** Tall fan palms lining both sidewalks of the street, and the street lamps between them ([x, z]). */
+export const STREET_PALMS: [number, number][] = [];
+export const STREET_LAMPS: [number, number][] = [];
+for (let x = -150; x <= 150; x += 13) {
+  if (Math.abs(x) > 9) STREET_PALMS.push([x, 46.9]);
+  const across = x + 6.5;
+  if (across <= 150 && !NEIGHBOR_DRIVES.some(d => Math.abs(d - across) < 4.5)) STREET_PALMS.push([across, 58.6]);
+}
+for (let x = -143; x <= 150; x += 26) {
+  STREET_LAMPS.push([x, 48.0]);
+  if (!NEIGHBOR_DRIVES.some(d => Math.abs(d - (x + 13)) < 4)) STREET_LAMPS.push([x + 13, 57.1]);
+}
 
 // Service stairwell (x 6..10, z -6..6): two lanes split by a divider; flights switch lanes and direction each storey.
 const LANE_A: [number, number] = [6.1, 7.7];
@@ -85,6 +99,8 @@ export function createMansionMap(): MapDef {
     spawnYaw: 0,
     // A party night: the mission starts at 9 pm.
     timeOfDay: 21,
+    // Neighbouring estates, palm-lined streets, the canyon behind and the lights of LA (client scenery).
+    backdrop: 'beverlyHills',
   };
 }
 
@@ -130,6 +146,9 @@ function buildSecurityTeam(m: MapBuilder): void {
   guard({ id: 'lounge', x: 14, y: G, z: -12, yaw: S, weapon: 'pistol',
     route: [p(14, G, -12, 5), p(20, G, -15, 4), p(9, G, -15, 4)] });
   guard({ id: 'garage', x: 24.5, y: G, z: 3.2, yaw: E, weapon: 'shotgun', scan: 1.4 });
+  // Two on a smoke break in the yard behind the garage, talking shop (you can listen in).
+  guard({ id: 'smoke-1', name: 'Mills', x: 29.6, y: G, z: -12.6, yaw: E, weapon: 'pistol', scan: 0.25, relaxed: true });
+  guard({ id: 'smoke-2', name: 'Dario', x: 31.0, y: G, z: -12.9, yaw: Wst, weapon: 'smg', scan: 0.25, relaxed: true });
 
   // ---- Basement: the security room, the vault, the gallery hall.
   guard({ id: 'monitors', x: 15, y: B, z: -2.9, yaw: N, weapon: 'pistol', seated: true });
@@ -158,11 +177,31 @@ function buildSecurityTeam(m: MapBuilder): void {
   // Doors: the security room's, and the penthouse's two (keycard).
   m.props.push({ kind: 'door', id: 'security', x: 10, y: B, z: 3.7, axis: 'z', width: 1.4, height: 2.3 });
   m.props.push({ kind: 'door', id: 'study-west', x: 6, y: F3, z: 3.3, axis: 'z', width: 1.4, height: 2.3, lock: 'keycard' });
+  m.props.push({ kind: 'door', id: 'garden', x: -22, y: G, z: -1.0, axis: 'z', width: 1.1, height: 2.3, lock: 'pick' });
+  f('topiary', -23.5, G, -2.9);
+  f('topiary', -23.5, G, 0.9);
   m.props.push({ kind: 'door', id: 'study-north', x: 0, y: F3, z: -6, axis: 'x', width: 2.2, height: 2.6, lock: 'keycard' });
 
   // Reyes, tied to a chair in the middle of the study.
   f('diningChair', 2.2, F3, -0.8, 'west');
   m.props.push({ kind: 'hostage', id: 'reyes', x: 2.2, y: F3, z: -0.8, yaw: Wst, seat: 0.47 });
+
+  // Leads to where Reyes is being held (the security terminal's camera log is another).
+  const clue = (id: string, model: ClueModel, x: number, y: number, z: number, yaw: number) => m.props.push({ kind: 'clue', id, model, x, y, z, yaw });
+  clue('cellar', 'zipties', -1.1, B + 0.76, -3.15, 0.4);
+  clue('office', 'laptop', 14.62, G + 0.78, -1.5, -0.4);
+  clue('kitchen', 'ticket', -13.3, G + 0.93, -12.45, 0.3);
+  clue('phone', 'phone', 15.95, F2 + 0.6, -17.45, 0.6);
+  clue('smokers', 'listen', 30.3, G, -12.75, 0);
+  // Optional: Castell's ledger, on the cash in the vault (evidence for the prosecution).
+  clue('ledger', 'ledger', 17.4, B + 1.0, -12.1, 0.5);
+
+  // Extra places to hide a body (any wardrobe or locker will do): the kitchen pantry, the basement
+  // hall, the garage, the master suite's closet.
+  f('wardrobe', -21.45, G, -14.6, 'east', { w: 1.0 });
+  f('gunLocker', -14, B, 5.55, 'north');
+  f('gunLocker', 35.5, G, 3.5, 'west');
+  f('wardrobe', 10.5, F2, -0.6, 'east');
 
   // Where you leave (by the van), where reinforcements come from, where the security terminal is.
   m.props.push({ kind: 'marker', id: 'extract', x: 0.4, y: G, z: 37.4 });
@@ -338,6 +377,25 @@ function buildGrounds(m: MapBuilder): void {
   m.overlay(-160, W + 0.3, -4, 48.5, G, 'stone');
   m.overlay(4, W + 0.3, 160, 48.5, G, 'stone');
   m.overlay(-4, W - 0.3, 4, 48.5, G, 'cobble');
+
+  // Across the street: a sidewalk, then the neighbours' tall ficus hedges with gated driveways (the
+  // estates themselves are scenery, see the client's Neighborhood). The hedges and two invisible stops
+  // down the street keep you on the block.
+  m.overlay(-160, 56.5, 160, 59.9, G, 'stone');
+  const drives = NEIGHBOR_DRIVES;
+  let from = -160;
+  for (const x of [...drives, 160 + 3]) {
+    if (x - 2.6 > from) m.box(from, G, 60, Math.min(160, x - 2.6), G + 3.8, 61.6, 'hedge');
+    from = x + 2.6;
+    if (x > 160) break;
+    for (const sx of [-1, 1]) m.box(x + sx * 2.6 - 0.45, G, 60.2, x + sx * 2.6 + 0.45, G + 3.2, 61.4, 'stone');
+    m.box(x - 2.15, G, 60.75, x + 2.15, G + 2.6, 60.85, 'steel', 0x1d1f22);
+    m.overlay(x - 2.2, 56.5, x + 2.2, 60.8, G, 'cobble');
+  }
+  for (const sx of [-1, 1]) m.box(sx * 72 - 0.5, G, W + 0.4, sx * 72 + 0.5, G + 6, 60, 'stucco', undefined, true);
+  // Trunks and lamp posts are solid (drawn by the client's Neighborhood).
+  for (const [x, z] of STREET_PALMS) m.box(x - 0.3, G, z - 0.3, x + 0.3, G + 6, z + 0.3, 'wood', undefined, true, 40);
+  for (const [x, z] of STREET_LAMPS) m.box(x - 0.12, G, z - 0.12, x + 0.12, G + 4.5, z + 0.12, 'metal', undefined, true, 60);
 
   // Cobbled driveway: entry drive, fountain loop, motor court and garage apron.
   m.overlay(-4, 32, 4, W - 0.3, G, 'cobble');
@@ -622,7 +680,8 @@ function buildGroundFloor(m: MapBuilder): void {
       glazing(-4.6, -2.4, 0, 3.4), glazing(2.4, 4.6, 0, 3.4), glazing(7.3, 9.3), glazing(12, 16), doorway(20)],
     n: [glazing(-14, -8), doorway(-17.4), glazing(-5.6, -1.6, 0, 3.6), { from: -1.5, to: 1.5, bottom: 0, top: 3.0 },
       glazing(1.6, 5.6, 0, 3.6), glazing(8, 12), doorway(14.6), glazing(17, 21)],
-    w: [glazing(-16, -10)],
+    // The library's garden door: the quiet way in from the west lawn (locked; pick it).
+    w: [glazing(-16, -10), doorway(-1.0, 1.2, 2.4)],
     e: [doorway(-2.4)],
   });
 
@@ -704,7 +763,7 @@ function buildGroundFloor(m: MapBuilder): void {
   f('plantLarge', -13.3, y0, 5.2);
 
   // Library: shelves on two walls, executive desk, chesterfield and reading chairs, globe.
-  for (const z of [-5.2, -4.0, -2.8, -1.6, -0.4, 0.8, 2.0, 3.2, 4.4]) f('bookshelf', -21.6, y0, z, 'east', { h: 3.2 });
+  for (const z of [-5.2, -4.0, -2.8, 0.8, 2.0, 3.2, 4.4]) f('bookshelf', -21.6, y0, z, 'east', { h: 3.2 });
   for (const x of [-20.6, -19.4, -18.2, -17.0, -15.8]) f('bookshelf', x, y0, -5.7, 'south', { h: 3.2 });
   f('rug', -18, y0, 1.2, 'south', { w: 3.8, d: 3.4, variant: 0 });
   f('executiveDesk', -18, y0, -2.6);
@@ -729,10 +788,14 @@ function buildGroundFloor(m: MapBuilder): void {
   f('plantLarge', 10.7, y0, 5.2);
   f('wallArt', 10.12, y0 + 1.3, -2, 'east', { w: 1.6, h: 1.1, variant: 10 });
 
-  // Mudroom: lockers, bench.
+  // Mudroom: lockers, bench, a runner from the side door, a console with a lamp.
   for (const z of [1.0, 2.2, 3.4, 4.6]) f('wardrobe', 21.45, y0, z, 'west', { w: 1.2, h: 2.2 });
   f('bench', 19.2, y0, -5.4, 'north');
   f('plantSmall', 18.5, y0, 5.4);
+  f('rug', 19.9, y0, 0.5, 'south', { w: 1.3, d: 8, variant: 2 });
+  f('consoleTable', 18.35, y0, -2.2, 'east', { w: 1.4 });
+  f('tableLamp', 18.35, y0 + 0.8, -2.7);
+  f('wallArt', 18.12, y0 + 1.6, -2.2, 'east', { w: 1.2, h: 0.8, variant: 4 });
 
   // Media lounge & bar: TV wall and sectional, pool table, bar with back bar, arcade corner.
   f('tvWall', 10, y0 + 1.2, -6.12, 'north', { w: 2.4, h: 1.35 });
@@ -775,6 +838,12 @@ function buildGarage(m: MapBuilder): void {
   m.box(25, y0, -9.8, 30, y0 + 0.9, -9.2, 'wood');
   m.box(25, y0 + 1.4, -9.8, 30, y0 + 2.6, -9.75, 'darkWood');
   m.light(29, 7.6, -2, 0xffffff, 12, 14);
+  // Behind the garage: where the staff take their breaks.
+  f('outdoorTable', 33.6, G, -15.2);
+  f('outdoorChair', 32.7, G, -15.2, 'east');
+  f('outdoorChair', 34.5, G, -15.2, 'west');
+  f('urnPlanter', 28.2, G, -10.7);
+  f('urnPlanter', 34.8, G, -10.7);
 }
 
 // ---------------------------------------------------------------------------
@@ -828,6 +897,7 @@ function buildSecondFloor(m: MapBuilder): void {
   f('plantLarge', -13.4, y0, -3.3);
   f('curtain', -12.4, y0, 5.65, 'north', { h: 3.6 });
   f('curtain', -7.6, y0, 5.65, 'north', { h: 3.6 });
+  f('wallArt', -6.12, y0 + 1.7, 1.0, 'west', { w: 1.6, h: 0.9, variant: 6 });
 
   // Blue bedroom.
   bedroom(-20.65, y0, 1.0, 'west', 1.9, 0x4a6fa5);
@@ -835,6 +905,10 @@ function buildSecondFloor(m: MapBuilder): void {
   f('officeChair', -15.4, y0, 3.6, 'east', { color: 0x2f4a63 });
   f('wardrobe', -19.6, y0, -3.58, 'south');
   f('rug', -18.6, y0, 1.0, 'east', { w: 3.4, d: 2.6, variant: 2 });
+  f('wallArt', -21.88, y0 + 1.7, 1.0, 'east', { w: 1.6, h: 0.9, variant: 7 });
+  f('armchair', -15.0, y0, 0.4, 'west', { color: 0x8fa6c4 });
+  f('floorLamp', -14.5, y0, -0.6);
+  f('plantLarge', -21.2, y0, 5.2);
 
   // Green bedroom.
   bedroom(-10, y0, -16.65, 'north', 1.9, 0x5f8a5c);
@@ -842,6 +916,10 @@ function buildSecondFloor(m: MapBuilder): void {
   f('bench', -10, y0, -14.95);
   f('armchair', -13, y0, -8.4, 'south', { color: 0x9bb59a });
   f('rug', -10, y0, -14.8, 'south', { w: 3.2, d: 2.6, variant: 3 });
+  f('wallArt', -10, y0 + 1.7, -17.88, 'south', { w: 1.6, h: 0.9, variant: 8 });
+  f('wardrobe', -13.4, y0, -12.5, 'east');
+  f('floorLamp', -6.8, y0, -17.2);
+  f('plantLarge', -6.7, y0, -7.7, 'south', { variant: 1 });
 
   // Playroom.
   f('teepee', -20.4, y0, -15.6);
@@ -898,6 +976,8 @@ function buildSecondFloor(m: MapBuilder): void {
   f('towelRack', 21.0, y0 + 0.2, 5.85, 'north');
   f('plantSmall', 21.4, y0, 5.3);
   f('plantLarge', 17, y0, 5.2, 'south', { variant: 1 });
+  f('rug', 18.2, y0, -1.0, 'south', { w: 1.4, d: 1.8, variant: 1 });
+  f('wallArt', 21.88, y0 + 1.6, -1.0, 'west', { w: 1.0, h: 1.2, variant: 3 });
   m.box(20, y0, -5.8, 20.05, y0 + 2.2, -3.5, 'glass');
   m.box(20, y0, -3.5, 21.8, y0 + 2.2, -3.45, 'glass');
   m.box(20.6, y0 + 2.25, -5.2, 21.2, y0 + 2.3, -4.6, 'metal');

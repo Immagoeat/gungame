@@ -120,7 +120,8 @@ export class Hud {
     $('breathBar').style.display = f.breath < 0.999 ? 'block' : 'none';
     $('breathFill').style.width = `${Math.round(f.breath * 100)}%`;
     $('wName').textContent = f.weaponName;
-    $('ammoCount').innerHTML = `${f.ammo}<small> / ${f.magazine}</small>`;
+    // ammo < 0: unarmed.
+    $('ammoCount').innerHTML = f.ammo < 0 ? '—' : `${f.ammo}<small> / ${f.magazine}</small>`;
     $('reloadTxt').textContent = f.reloading ? 'RELOADING…' : f.ammo === 0 ? 'PRESS R' : '';
     $('timer').textContent = formatTime(f.elapsed);
     $('scope').style.display = f.scoped ? 'block' : 'none';

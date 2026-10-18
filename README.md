@@ -1,10 +1,10 @@
-# Gun Game
+# The Meridian
 
-A 3D first-person shooter built with TypeScript and Three.js, shipped as a desktop app through Electron.
+A 3D stealth-action first-person shooter built with TypeScript and Three.js, shipped as a desktop app through Electron. (It started life as "Gun Game": that's still the name of the weapon-ladder mode, the `@gungame/*` packages and the `gungame.sh` launcher.)
 
 Modes:
 - **Gun Game** (playable): each kill upgrades your weapon, and a kill with the Golden Gun wins.
-- **Campaign** (in progress): story missions. Chapter 1, *The Mansion*, is a layout preview with no enemies yet.
+- **Campaign**: story missions. Chapter 1, *The Mansion*: a stealth hostage rescue during a party. Chapter 2, *The Aurelia*: undercover on a cruise ship to reach the Meridian's boss. Chapter 3, *The Port*: sabotage at a container terminal.
 - **Multiplayer** (in progress): online matches against an authoritative server.
 
 ## Quick start
@@ -18,7 +18,7 @@ npm run dev:server   # multiplayer server on ws://localhost:7777 (restarts on ch
 npm run check        # typecheck every package + run tests
 ```
 
-You can also launch the desktop app from the app menu ("Gun Game") or with `./gungame.sh`.
+You can also launch the desktop app from the app menu ("The Meridian") or with `./gungame.sh`.
 
 ## Project layout
 
@@ -93,6 +93,9 @@ packages/
   models. The pistol is a Glock 17 Gen5 built from its real profiles (`weapons/glock.ts`); the SMG, shotgun and
   assault rifle are still built from parts until models are added. Finishes repaint a
   model's materials but keep its surface detail; the "Factory" finish shows the original.
+- **Facial hair** (`entities/character/facialHair.ts`): each style is a density field over the face (cheeks, jaw,
+  moustache, chin); a fine copy of the head's surface is pushed out by it, sinking under the skin where it fades, so
+  edges taper and the mouth stays clear. The head's shape is shared (`shapeHead` in `entities/human.ts`).
 - **Character customization** (`shared/src/character.ts`, Character screen in `ui/CharacterScreen.ts`): uniform camo,
   headgear, vest, skin tone, facial hair, hair, gloves and boots. `entities/character/soldierOutfit.ts` generates the
   soldier's clothing and gear as skinned meshes on the character's skeleton for the chosen look (saved in
@@ -109,15 +112,73 @@ packages/
   searchlights, coloured uplights, DJ booth with moving heads and lasers, bars, champagne tower, red carpet and balloon
   arch, glowing orbs. The mission starts at 9 pm under a starry sky.
   Live-synthesised house music plays from the DJ booth (`audio/PartyMusic.ts`): positional, and muffled through walls.
-- **Chapter 1: The Mansion** (`modes/campaign/mansionMission.ts`): rescue Daniel Reyes. Stages: get inside, the
-  security terminal (loop the camera feeds), Kessler's keycard, free Reyes (lockdown), get him to the van. The party must
-  not find out before the escape (gunshots heard, a guest hit, a body seen by a guest, a fight near guests), or the
-  mission fails. Each stage saves a checkpoint (Continue / Restart in the menu). E interacts: takedowns from behind,
-  drag bodies, search, doors, hold E for the terminal and the ropes.
+- **Voice lines** (`client/src/audio/voicelines.json`, `audio/Voice.ts`): every spoken line with its subtitle text and
+  speaker. Radio voices (Overwatch, Viper, Security) play in your ear with a squelch and duck the music; guards and
+  Reyes speak from where they are, muffled through walls. Guards call out when they notice, spot, search, give up,
+  fight and get hit (`bark` events from `GuardManager`), each in their own voice. The audio is rendered offline with
+  Piper TTS by `tools/voice/generate.py` (credits in `public/audio/CREDITS.md`); a test fails if a line's recording
+  is missing or out of date. Without the files, lines are subtitles only.
+- **Chapter 1: The Mansion** (`modes/campaign/mansionMission.ts`): rescue Daniel Reyes. Stages: get inside (the side
+  door, or pick the library's garden door off the quiet west lawn), find out where he's held (any three of six leads:
+  the camera log on the security terminal, the wine cellar, Castell's laptop, a kitchen order, Castell's phone, two
+  guards on a smoke break to listen in on; text in `mansionLeads.ts`, models in `world/ClueSystem.ts`), Kessler's
+  keycard, free Reyes (lockdown), get him to the van, then the getaway (`cutscenes/mansionEscape.ts`). The party must
+  not find out before the escape (gunshots heard, a guest hit, a body seen by a guest, a fight near guests). Each
+  stage, and each lead, saves a checkpoint (including where bodies lie). Six optional challenges
+  (`mansionChallenges.ts`: ghost, no kills, no bodies found, every lead, Castell's ledger from the vault, under 20:00)
+  are scored at the end and kept for good; the pause screen shows the objective, the leads with what they said, and
+  the challenges.
+- **Chapter 2: The Aurelia** (`modes/campaign/aurelia/`, map `shared/src/maps/aurelia.ts`): a cruise liner at sea,
+  six decks (crew, staterooms, promenade with casino and lounge, lido, the Meridian's deck, bridge). You board as
+  "Marco Navarro", unarmed and in a suit. **Undercover** (`cover.ts`): your clothes decide where you can be (guest,
+  steward, ship security); guards ignore you unless you give them a reason (trespassing, after a warning; a gun in
+  your hand, H holsters it; running, sneaking, takedowns, bodies). Uniforms lie about the ship or come off officers
+  you've knocked out (`modes/campaign/wardrobe.ts`, shared with Chapter 3); the player's outfit is drawn over their own look (`Game.setOutfit`).
+  **The story** (`story.ts`): Felix, your contact, in the casino; a suppressed pistol in a spa locker; five things to
+  read or overhear about the Meridian (three needed); Castell in his suite (conversation: he gives up Vale's keycard,
+  or you threaten him); then **Vale** (`vale.ts`): the Board in the lounge (poison the decanter for his toast), his
+  desk, his balcony (push him over, or shoot). Out through the stern to Overwatch's boat (`cutscenes/aureliaEscape.ts`).
+  Six challenges (`challenges.ts`). Named characters are `npc/StoryNPC.ts`; conversations (`conversation.ts`) are
+  scripts of voiced lines with numbered replies. The sea, outer hull, wake and coast lights are `world/Seascape.ts`.
+- **Chapter 3: The Port** (`modes/campaign/port/`, map `shared/src/maps/port.ts`): Terminal Est, a container
+  terminal at Marseille-Fos at night. Plant a charge on the Meridian's reserve before it's loaded on the Sirocco.
+  You start outside the fence in your own clothes; the same undercover rules as the ship (`port/cover.ts`: civilian,
+  docker, terminal security; nobody is allowed in the Meridian's compound, and they don't warn). The story
+  (`port/story.ts`): the docker's kit behind Nadia's car; Nadia in the canteen (conversation: security took her bag
+  with the charge at the shift's bag checks); the bag off the evidence rack in the gate office (security only: take
+  a guard's uniform, or sneak); any three of four leads to find which of the four boxes is the reserve (the
+  planner's load plan upstairs in Ops, customs' X-ray scans, the gate office bookings, two Meridian men overheard
+  by the reefers); plant the charge on its doors in the compound (in through a cut in the quay-side fence, round two
+  patrols inside and two outside, a camera sweeping the centre lane); then Marchetti's men take the gates and you
+  leave through the hole in the west fence, where Overwatch brings the van round. Guards and cameras notice you
+  faster here (`PORT_PERCEPTION`). Restricted areas are marked in the world (signs, red and white hatching across
+  each threshold), on screen (a warning card and a red edge while you're in; shared with Chapter 2) and on the
+  tactical map (shaded red for what you're wearing). Intro and outro: `cutscenes/portArrival.ts`
+, `cutscenes/portEscape.ts` (the Sirocco leaving, and the charge).
+  The water, far shore, other terminals and breakwater light are `world/Harbour.ts`; the yard's props (containers,
+  gantry cranes, straddle carriers, light masts, the X-ray portal) are `world/furniture/port.ts`. Six challenges.
+- **Field kit** (`modes/campaign/fieldKit.ts`): tag guards (T) to track them through walls (colour = alertness), throw
+  coins (G; `coins.ts`) that draw the nearest guard at ease to look without raising the alarm, the tactical map (M;
+  `ui/TacticalMap.ts`) drawn from the level (walkable floor, walls, glass, room names) with you, the objective, tagged
+  guards, cameras, doors, hiding spots and the van. Bodies dragged to any wardrobe or locker are hidden for good.
+- **Balance**: campaign security per difficulty is data (`DIFFICULTIES[...].stealth` in `shared/src/difficulty.ts`):
+  perception, guard accuracy, damage and reaction, how many guards hunt you in a lockdown (the rest hold their posts on
+  alert), reinforcement waves, coins. Guards go for Reyes only when they can't see you or he's much nearer; he takes
+  less damage when ducking and recovers like you do.
+  `tools/balance/coverage.cjs` (with the dev server running) draws heat maps of every floor showing how fast a
+  crouched player is spotted anywhere: use it when moving guards, cameras or entrances.
 - **Guards** (`npc/Guard.ts`, `npc/GuardManager.ts`; `guard` props in `buildSecurityTeam`): patrol routes, an
   awareness meter (distance, stance, light, night), noise from footsteps, shots and glass, cameras, body discovery,
   alarm levels 0–3 with reinforcement waves. Paths come from `shared/src/nav/NavGrid.ts` (0.5 m grid built from
   colliders); sight uses `World.clearLine`. Doors (`world/DoorSystem.ts`) can need key items.
+- **Beverly Hills around the estate** (`world/Neighborhood.ts`, enabled by the map's `backdrop`): neighbouring
+  estates behind ficus hedges (Mediterranean villas with terracotta hip roofs, a few modern houses, lit windows and
+  glowing pools at night), tall fan palms and lamps lining the street, the canyon rising behind the house with house
+  lights and winding roads, the LA basin's lights to the south and the Century City towers. It's scenery only: merged
+  meshes, instanced palms and lamps, no shadows or real lights (about 1-2 ms a frame). Distant pieces use a longer fog
+  (`farFog`), and everything stays inside the night sky sphere (880 m). The across-street hedges, palm trunks and lamp
+  posts are real map geometry (`NEIGHBOR_DRIVES`, `STREET_PALMS`, `STREET_LAMPS` in `mansion.ts`), so the street
+  has edges.
 - **The player character** (`entities/character/`) is a rigged, animated character model (Mixamo skeleton). Clips
   drive walking and running; crouch (leg IK keeps the feet planted), prone crawl, swimming, aiming and both hands on the
   gun (two-bone IK, posed fingers) are layered on procedurally. The same model's arms are the first-person arms

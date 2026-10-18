@@ -192,6 +192,8 @@ export const party: Record<string, Builder> = {
     wash.position.set(0, 2.2, 1.6);
     fx.add(wash);
     const dir = new THREE.Vector3();
+    const beamDir = new THREE.Vector3();
+    const beamQuat = new THREE.Quaternion();
     k.dynamic(fx, (_dt, t) => {
       const on = Math.max(0.35, ambience.night);
       const beat = Math.pow(1 - ((t * 124 / 60) % 1), 3); // 124 bpm pulse
@@ -202,6 +204,11 @@ export const party: Record<string, Builder> = {
       for (const h of heads) {
         h.yoke.rotation.y = Math.sin(t * 0.7 + h.seed) * 1.4;
         h.lamp.rotation.x = Math.sin(t * 0.9 + h.seed * 2) * 0.9 - 0.5;
+        // Stop each beam at the floor under the booth (on a ship's deck there's a room below it).
+        h.yoke.updateMatrixWorld(true);
+        beamDir.set(0, 1, 0).applyQuaternion(h.beam.mesh.getWorldQuaternion(beamQuat));
+        const reach = beamDir.y < -0.05 ? Math.min(26, (top - 0.55) / -beamDir.y) : 26;
+        h.beam.mesh.scale.set(1.6 * reach / 26, reach, 1.6 * reach / 26);
         partyColor(t * 1.5, h.seed * 0.1, h.beam.material.uniforms.color.value);
         h.lens.emissive.copy(h.beam.material.uniforms.color.value);
         h.beam.setStrength(0.35 * ambience.night * (0.7 + 0.3 * beat));
@@ -212,6 +219,9 @@ export const party: Record<string, Builder> = {
         const a = (i - 4) * 0.09 + Math.sin(t * 1.3) * 0.5;
         dir.set(Math.sin(a), -0.08 + Math.sin(t * 0.8) * 0.12, Math.cos(a));
         r.aim(dir);
+        const ry = dir.y / dir.length();
+        const reach = ry < -0.02 ? Math.min(40, (top - 0.3) / -ry) : 40;
+        r.mesh.scale.y = reach;
         r.setStrength(0.9 * ambience.night * burst);
       });
       partyColor(t * 1.5, 0.3, wash.color);

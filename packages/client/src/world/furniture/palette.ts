@@ -35,7 +35,33 @@ const std = (key: string, p: Std) => get(key, () => new THREE.MeshStandardMateri
 /** Textures that scroll every frame (water). */
 export const scrollingTextures: { texture: THREE.Texture; speed: [number, number] }[] = [];
 
+/** Ribbed steel (shipping containers): the ribs run up the sides, about 30 to a 40-foot box. */
+const corrugation = () => {
+  let t = textures.get('corrT');
+  if (!t) {
+    t = canvasTexture(64, (g, sz) => {
+      for (let x = 0; x < sz; x++) {
+        const v = 0.62 + 0.38 * Math.cos((x / sz) * Math.PI * 2);
+        g.fillStyle = `rgb(${Math.round(255 * v)},${Math.round(255 * v)},${Math.round(255 * v)})`;
+        g.fillRect(x, 0, 1, sz);
+      }
+      // Grime and the odd rust streak running down from the top rail.
+      for (let i = 0; i < 40; i++) {
+        g.fillStyle = `rgba(${90 + Math.random() * 40},${50 + Math.random() * 20},30,${0.04 + Math.random() * 0.08})`;
+        g.fillRect(Math.random() * sz, 0, 1 + Math.random() * 2, Math.random() * sz * 0.8);
+      }
+    });
+    t.repeat.set(30, 1);
+    textures.set('corrT', t);
+    const n = normalMapFrom(t, 4);
+    n.repeat.set(30, 1);
+    textures.set('n:corrT', n);
+  }
+  return { map: t, normalMap: textures.get('n:corrT')! };
+};
+
 export const P = {
+  corrugated: (color: number) => std(`corr${color}`, { color, ...corrugation(), roughness: 0.6, metalness: 0.3 }),
   fabric: (color: number) => std(`fabric${color}`, {
     color, map: tex('weave', () => canvasTexture(64, paint.weave), 4), normalMap: nrm('weave', 2), roughness: 0.95,
   }),

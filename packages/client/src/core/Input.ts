@@ -1,18 +1,32 @@
 import { Buttons, type Stance } from '@gungame/shared';
 
+/** How long a click waits to become a shot (covers a click a moment before the gun is ready). */
+const FIRE_BUFFER_MS = 150;
+
 /** Keyboard/mouse state plus pointer lock. Mouse movement accumulates until consumed each frame. */
 export class Input {
   private readonly keys = new Set<string>();
   private lookX = 0;
   private lookY = 0;
   mouseHeld = false;
-  /** Set on click, cleared once a shot is attempted (semi-auto weapons fire once per click). */
-  wantFire = false;
+  /** When the trigger was last clicked; a click only counts for a moment (it isn't saved up for later). */
+  private fireAt = -Infinity;
+  /** Set when firing interrupted a sprint: Shift has to be pressed again to sprint. */
+  sprintBlocked = false;
   aiming = false;
   /** Stance the player has toggled into (C crouch, Z prone); movement applies it when there is room. */
   stance: Stance = 'stand';
   /** Set when Space was used to stand up, so that press doesn't also jump. */
   jumpBlocked = false;
+
+  /** A click asking for a shot (semi-auto weapons fire once per click). Clicks expire after FIRE_BUFFER_MS. */
+  get wantFire(): boolean {
+    return performance.now() - this.fireAt < FIRE_BUFFER_MS;
+  }
+
+  set wantFire(v: boolean) {
+    this.fireAt = v ? performance.now() : -Infinity;
+  }
 
   onKeyDown: (code: string) => void = () => {};
   /** Mouse wheel while playing: +1 scrolls down, -1 up. */
@@ -24,6 +38,7 @@ export class Input {
   constructor(private readonly canvas: HTMLCanvasElement) {
     addEventListener('keydown', e => {
       this.keys.add(e.code);
+      if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat) this.sprintBlocked = false;
       if (e.code === 'Space' && this.locked) e.preventDefault();
       this.onKeyDown(e.code);
     });
@@ -34,7 +49,7 @@ export class Input {
     addEventListener('blur', () => { this.keys.clear(); this.clearActions(); });
     addEventListener('mousedown', e => {
       if (!this.locked) return;
-      if (e.button === 0) { this.mouseHeld = true; this.wantFire = true; }
+      if (e.button === 0) { this.mouseHeld = true; this.wantFire = true; this.sprintBlocked = true; }
       if (e.button === 2) this.aiming = true;
     });
     addEventListener('mouseup', e => {
@@ -49,6 +64,9 @@ export class Input {
       this.onWheel(e.deltaY > 0 ? 1 : -1);
     }, { passive: true });
     addEventListener('mousemove', e => {
+      // A release can be missed (focus changes, pointer lock edge cases): trust the reported buttons.
+      if (this.mouseHeld && !(e.buttons & 1)) this.mouseHeld = false;
+      if (this.aiming && !(e.buttons & 2)) this.aiming = false;
       if (!this.locked) return;
       this.lookX += e.movementX;
       this.lookY += e.movementY;
@@ -81,7 +99,7 @@ export class Input {
   }
 
   clearActions(): void {
-    this.mouseHeld = this.wantFire = this.aiming = false;
+    this.mouseHeld = this.wantFire = this.aiming = this.sprintBlocked = false;
     this.lookX = this.lookY = 0;
   }
 
@@ -96,7 +114,7 @@ export class Input {
     if (this.stance === 'prone') b |= Buttons.Prone;
     if (this.isDown('KeyC')) b |= Buttons.Descend;
     if (this.isDown('Space') && !this.jumpBlocked) b |= Buttons.Jump;
-    if (this.isDown('ShiftLeft') || this.isDown('ShiftRight')) b |= Buttons.Sprint;
+    if ((this.isDown('ShiftLeft') || this.isDown('ShiftRight')) && !this.sprintBlocked && !this.mouseHeld) b |= Buttons.Sprint;
     if (this.aiming) b |= Buttons.Aim;
     if (this.mouseHeld) b |= Buttons.Fire;
     return b;

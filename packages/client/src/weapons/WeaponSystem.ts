@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { applyAttachments, raycastBoxes, type WeaponDef, type WeaponId } from '@gungame/shared';
+import { applyAttachments, raycastBoxes, type Loadout, type WeaponDef, type WeaponId } from '@gungame/shared';
 import type { Game } from '../core/Game';
 import { loadouts } from '../core/loadouts';
 import { muzzleFlashTexture } from '../world/textures';
@@ -29,6 +29,8 @@ export class WeaponSystem {
   private autoReloadTimer = 0;
   private switchTimer = 0;
   private kick = 0;
+  /** 0 gun up .. 1 lowered for sprinting; the gun can't fire until it's back up. */
+  private sprintPose = 0;
   private bobPhase = 0;
   private flashTimer = 0;
   private gun: GunModel | null = null;
@@ -69,6 +71,7 @@ export class WeaponSystem {
 
   /** Shows or hides the first-person gun and arms (hidden in menus). */
   setVisible(visible: boolean): void {
+    visible &&= !this.holstered;
     this.holder.visible = visible;
     if (this.arms?.cameraSpace) this.arms.object.visible = visible;
     if (!visible) this.hideAccessories();
@@ -99,19 +102,53 @@ export class WeaponSystem {
     this.setInventory([id]);
   }
 
-  /** Hands the player a set of weapons, all fully loaded, and draws the first. */
+  /**
+   * No gun at all (undercover, before you've got hold of one): nothing in your hands and nothing to
+   * fire. Fists still work for takedowns. Giving a weapon ends it.
+   */
+  holstered = false;
+  /** Fittings a mission puts on a gun it hands you (over the player's own loadout), e.g. a suppressor. */
+  private readonly fitted = new Map<WeaponId, Loadout>();
+
+  /** Hands the player a set of weapons, all fully loaded, and draws the first. Empty = unarmed. */
   setInventory(ids: WeaponId[]): void {
-    this.inventory = ids.length ? [...ids] : ['pistol'];
+    this.fitted.clear();
+    if (!ids.length) {
+      this.inventory = [];
+      this.mags.clear();
+      this.previous = null;
+      this.holstered = true;
+      this.setVisible(false);
+      this.game.onWeaponChanged(this.id, this.def);
+      return;
+    }
+    this.holstered = false;
+    this.inventory = [...ids];
     this.mags.clear();
     this.previous = null;
     this.draw(this.inventory[0]);
   }
 
   /** Adds a weapon to what you carry (fully loaded) and draws it. */
-  give(id: WeaponId): void {
+  give(id: WeaponId, holstered = false, fittings?: Loadout): void {
+    if (fittings) this.fitted.set(id, fittings);
     if (!this.inventory.includes(id)) this.inventory.push(id);
     this.mags.delete(id);
-    this.select(id);
+    if (this.id === id) this.draw(id); else this.select(id);
+    this.holstered = holstered;
+    this.setVisible(!holstered);
+    this.game.onWeaponChanged(this.id, this.def);
+  }
+
+  /** H: put the gun away (out of sight: undercover, it's what people notice) or draw it again. */
+  toggleHolster(): void {
+    if (!this.inventory.length) return;
+    this.holstered = !this.holstered;
+    if (!this.holstered) {
+      this.setVisible(true);
+      this.switchTimer = 0.45; // drawing takes a moment
+    } else this.setVisible(false);
+    this.game.audio.beep(this.holstered ? 520 : 760, 0.03, 'triangle', 0.03);
     this.game.onWeaponChanged(this.id, this.def);
   }
 
@@ -126,6 +163,7 @@ export class WeaponSystem {
   /** Number keys: slot 0 is the first carried weapon. */
   selectSlot(slot: number): void {
     const id = this.inventory[slot];
+    if (id && this.holstered) this.toggleHolster();
     if (id) this.select(id);
   }
 
@@ -145,7 +183,7 @@ export class WeaponSystem {
   /** Puts a weapon in your hands with the player's saved attachments. */
   private draw(id: WeaponId): void {
     this.id = id;
-    this.def = applyAttachments(id, loadouts.get(id));
+    this.def = applyAttachments(id, { ...loadouts.get(id), ...this.fitted.get(id) });
     this.ammo = Math.min(this.mags.get(id) ?? this.def.magazine, this.def.magazine);
     this.rebuildModel();
     this.reloadTimer = this.fireCooldown = this.autoReloadTimer = 0;
@@ -154,7 +192,7 @@ export class WeaponSystem {
 
   /** Re-applies attachments after they change in the armory, keeping the current weapon. */
   refreshLoadout(): void {
-    this.def = applyAttachments(this.id, loadouts.get(this.id));
+    this.def = applyAttachments(this.id, { ...loadouts.get(this.id), ...this.fitted.get(this.id) });
     this.rebuildModel();
     this.ammo = Math.min(this.ammo, this.def.magazine);
   }
@@ -182,6 +220,7 @@ export class WeaponSystem {
   }
 
   startReload(): void {
+    if (this.holstered) return;
     if (this.reloadTimer > 0 || this.ammo === this.def.magazine || this.switchTimer > 0) return;
     this.reloadTimer = this.def.reloadTime;
     this.game.audio.beep(500, 0.05, 'square', 0.05);
@@ -189,7 +228,7 @@ export class WeaponSystem {
   }
 
   toggleFlashlight(): void {
-    if (!this.def.flashlight) return;
+    if (this.holstered || !this.def.flashlight) return;
     this.flashlightOn = !this.flashlightOn;
     this.game.audio.beep(this.flashlightOn ? 1800 : 1200, 0.03, 'square', 0.04);
   }
@@ -217,6 +256,13 @@ export class WeaponSystem {
   /** @param canFire false while swimming: the gun is held out of the water. */
   update(dt: number, sprinting: boolean, canFire = true): void {
     const input = this.game.input;
+    if (this.holstered) {
+      input.wantFire = false;
+      this.holder.visible = false;
+      if (this.arms?.cameraSpace) this.arms.object.visible = false;
+      this.hideAccessories();
+      return;
+    }
     this.fireCooldown -= dt;
     if (this.switchTimer > 0) this.switchTimer -= dt;
     if (this.reloadTimer > 0) {
@@ -230,9 +276,10 @@ export class WeaponSystem {
       this.autoReloadTimer -= dt;
       if (this.autoReloadTimer <= 0 && this.ammo === 0) this.startReload();
     }
+    this.sprintPose += ((sprinting ? 1 : 0) - this.sprintPose) * (1 - Math.exp(-14 * dt));
     const trigger = this.def.automatic ? input.mouseHeld : input.wantFire;
     if (!canFire) input.wantFire = false;
-    if (canFire && trigger && this.fireCooldown <= 0 && this.reloadTimer <= 0 && this.switchTimer <= 0) {
+    if (canFire && trigger && !sprinting && this.sprintPose < 0.2 && this.fireCooldown <= 0 && this.reloadTimer <= 0 && this.switchTimer <= 0) {
       if (this.ammo > 0) this.fire();
       else {
         this.game.audio.beep(220, 0.04, 'square', 0.05);
@@ -240,7 +287,7 @@ export class WeaponSystem {
       }
       input.wantFire = false;
     }
-    this.updateViewModel(dt, sprinting, !canFire);
+    this.updateViewModel(dt, !canFire);
     this.updateAccessories(!canFire);
   }
 
@@ -284,7 +331,7 @@ export class WeaponSystem {
     if (this.ammo === 0) this.autoReloadTimer = 0.25;
   }
 
-  private updateViewModel(dt: number, sprinting: boolean, lowered = false): void {
+  private updateViewModel(dt: number, lowered = false): void {
     const g = this.game;
     const w = this.def;
     const p = g.player;
@@ -312,7 +359,7 @@ export class WeaponSystem {
     const reloadTilt = this.reloadTimer > 0
       ? Math.sin(Math.min(1, 1 - this.reloadTimer / w.reloadTime) * Math.PI) * 0.9
       : 0;
-    this.holder.rotation.set(this.kick * (aiming ? 0.04 : 0.1) - reloadTilt * 0.5, sprinting ? 0.6 : 0, reloadTilt * 0.6 + (sprinting ? 0.2 : 0));
+    this.holder.rotation.set(this.kick * (aiming ? 0.04 : 0.1) - reloadTilt * 0.5, this.sprintPose * 0.6, reloadTilt * 0.6 + this.sprintPose * 0.2);
     this.setVisible(!this.isScoped());
     if (this.arms?.cameraSpace) {
       this.holder.updateMatrix();

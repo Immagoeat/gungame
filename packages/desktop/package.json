@@ -1,6 +1,6 @@
 {
   "name": "@gungame/desktop",
-  "productName": "Gun Game",
+  "productName": "The Meridian",
   "version": "0.1.0",
   "private": true,
   "description": "Electron shell that runs the client as a desktop app",

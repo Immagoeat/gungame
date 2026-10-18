@@ -2,7 +2,7 @@
   "name": "gungame",
   "version": "0.1.0",
   "private": true,
-  "description": "Gun Game — 3D FPS with gun game, campaign and multiplayer modes",
+  "description": "The Meridian: a 3D stealth-action FPS with a campaign, Gun Game and multiplayer modes",
   "workspaces": [
     "packages/*"
   ],

@@ -16,6 +16,8 @@ export class Player implements Mover {
   swimming = false;
   submerged = 0;
   waterLevel = -Infinity;
+  /** The endless ground plane's height (none at sea). */
+  floor = 0;
   /** Walking speed multiplier (1 normally; slower when dragging a body). */
   speedMul = 1;
   /** Camera height above the feet; eases towards the stance's eye height. */

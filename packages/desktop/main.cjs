@@ -3,7 +3,10 @@ const { app, BrowserWindow, net, protocol } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-app.setName('Gun Game');
+// Saves and settings stay where they've always been (the app was called "Gun Game" before), so
+// renaming it doesn't lose anyone's progress. This has to come before the rename below.
+app.setPath('userData', path.join(app.getPath('appData'), 'Gun Game'));
+app.setName('The Meridian');
 
 // The built game is served from app://game/ rather than file:// so it can fetch its model files
 // (fetch doesn't work on file:// pages).
@@ -26,7 +29,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     backgroundColor: '#000000',
-    title: 'Gun Game',
+    title: 'The Meridian',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false },

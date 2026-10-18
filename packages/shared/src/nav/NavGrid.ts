@@ -49,6 +49,9 @@ class BoxIndex {
 }
 const key = (tx: number, tz: number) => (tx + 4096) * 8192 + (tz + 4096);
 
+/** Standable tops closer than this in one column are one floor (a covering on a slab). */
+const SAME_FLOOR = 0.15;
+
 export class NavGrid {
   readonly cell: number;
   readonly minX: number;
@@ -113,6 +116,9 @@ export class NavGrid {
         for (const y of [...tops].sort((a, b) => a - b)) {
           // Standing on this top: something must be under the feet (or it's the ground), and room above.
           if (!fits(x, y, z, near)) continue;
+          // A rug or a floor covering a few centimetres up is the same floor, not a second one: the
+          // covering's top replaces the slab's (two layers that don't join send paths the long way round).
+          if (this.colCount[c] > 0 && y - ys[ys.length - 1] < SAME_FLOOR) { ys[ys.length - 1] = y; continue; }
           if (this.colCount[c] === 255) break;
           xs.push(x); ys.push(y); zs.push(z);
           this.colCount[c]++;
@@ -240,17 +246,19 @@ export class NavGrid {
     const ax = this.pos[a * 3], ay = this.pos[a * 3 + 1], az = this.pos[a * 3 + 2];
     const bx = this.pos[b * 3], bz = this.pos[b * 3 + 2];
     const dist = Math.hypot(bx - ax, bz - az);
-    const steps = Math.ceil(dist / (this.cell * 0.5));
+    const steps = Math.max(1, Math.ceil(dist / (this.cell * 0.5)));
     let y = ay;
+    let n = a;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
       const x = ax + (bx - ax) * t;
       const z = az + (bz - az) * t;
-      const n = this.nodeIn(Math.floor((x - this.minX) / this.cell), Math.floor((z - this.minZ) / this.cell), y, this.step);
+      n = this.nodeIn(Math.floor((x - this.minX) / this.cell), Math.floor((z - this.minZ) / this.cell), y, this.step);
       if (n < 0) return false;
       y = this.pos[n * 3 + 1];
     }
-    return true;
+    // Walking the line has to arrive at b itself, not at another deck above or below it.
+    return n === b;
   }
 
   /** Drops waypoints that can be skipped by walking straight. */

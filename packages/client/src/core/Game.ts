@@ -26,6 +26,9 @@ import type { PartyMusic } from '../audio/PartyMusic';
 import { LAYER_SCREENS, type SecurityCam } from '../world/SecuritySystem';
 import { PartySystem } from '../world/PartySystem';
 import { World } from '../world/World';
+import { characterLook } from './characterLook';
+import type { CivilianStyle } from '../entities/character/soldierOutfit';
+import { VoicePlayer } from '../audio/Voice';
 import { AudioSystem } from './Audio';
 import { Graphics } from './Graphics';
 import { Input } from './Input';
@@ -56,6 +59,8 @@ export class Game {
   readonly settings = loadSettings();
   readonly gfx: Graphics;
   readonly audio: AudioSystem;
+  /** Spoken lines with their subtitles (audio loads in the background). */
+  readonly voice: VoicePlayer;
   readonly input: Input;
   world: World;
   readonly player = new Player();
@@ -100,12 +105,13 @@ export class Game {
   private readonly loadingUi = new LoadingScreen();
   /** Bumped by every new load (and by quitting), so a superseded load stops where it is. */
   private loadToken = 0;
-  private ambience: { set(level: number): void; stop(): void } | null = null;
+  private ambience: { set(level: number, below?: number): void; stop(): void } | null = null;
   private tinkleBudget = 0;
 
   constructor(container: HTMLElement) {
     this.gfx = new Graphics(container, this.settings.quality);
     this.audio = new AudioSystem(this.settings.volume);
+    this.voice = new VoicePlayer(this.audio);
     this.audio.setMusicVolume(this.settings.music);
     this.input = new Input(this.gfx.canvas);
     this.world = new World(createMap(MENU_MAP), this.gfx.scene);
@@ -133,8 +139,10 @@ export class Game {
 
     this.input.onKeyDown = code => {
       if (this.state !== 'playing') return;
+      if (this.mode?.key?.(code)) return;
       if (code === 'KeyR') this.weapons.startReload();
       if (code === 'KeyF') this.weapons.toggleFlashlight();
+      if (code === 'KeyH') this.weapons.toggleHolster();
       if (/^Digit[1-9]$/.test(code)) this.weapons.selectSlot(Number(code.slice(5)) - 1);
       if (code === 'KeyQ') this.weapons.swapToPrevious();
       if (code === 'KeyE') this.interact();
@@ -159,6 +167,8 @@ export class Game {
     this.goToMainMenu();
     // Build the party guests' bodies in the background while the menu is up.
     PartySystem.prewarm(createMap('mansion').props);
+    PartySystem.prewarm(createMap('aurelia').props);
+    void this.voice.preload();
     this.gfx.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -204,6 +214,12 @@ export class Game {
     this.projectiles.clear();
     this.gfx.setTimeOfDay(this.world.map.timeOfDay ?? 15);
     this.player.reset(this.world.map.playerSpawn, this.world.map.spawnYaw);
+    this.player.floor = this.world.map.noGround ? -Infinity : 0;
+    this.world.doors.inTheWay = box => {
+      const p = this.player, r = p.radius;
+      return p.pos.x + r > box.min.x && p.pos.x - r < box.max.x && p.pos.z + r > box.min.z && p.pos.z - r < box.max.z &&
+        p.pos.y + p.height > box.min.y && p.pos.y < box.max.y;
+    };
     this.input.stance = 'stand';
     this.waterFx.clear();
     this.gfx.setUnderwater(false);
@@ -261,6 +277,7 @@ export class Game {
     this.loadingUi.cancel();
     this.endCutscene(false);
     this.stopAmbience();
+    this.voice.stopRadio();
     this.mode?.dispose();
     this.mode = null;
     this.state = 'menu';
@@ -351,7 +368,9 @@ export class Game {
       this.music = this.audio.partyMusic();
       this.musicCheck = 0;
     }
-    if (this.gfx.night > 0.5) this.ambience = this.audio.nightAmbience();
+    if (this.world.map.backdrop === 'openSea') this.ambience = this.audio.seaAmbience();
+    else if (this.world.map.backdrop === 'harbour') this.ambience = this.audio.harbourAmbience();
+    else if (this.gfx.night > 0.5) this.ambience = this.audio.nightAmbience();
   }
 
   private stopAmbience(): void {
@@ -364,7 +383,7 @@ export class Game {
   /** Volume, panning and muffling from where the camera is relative to the speakers. */
   private updateMusic(dt: number): void {
     if (!this.music) {
-      this.ambience?.set(this.state === 'paused' ? 0.2 : 0.5);
+      this.setAmbience(this.state === 'paused' || this.state === 'over');
       return;
     }
     const music = this.music;
@@ -381,10 +400,16 @@ export class Game {
     }
     const away = this.state === 'paused' || this.state === 'over';
     music.setListener(distance, side, this.musicBlocked, away);
-    // Crickets outside; faint indoors.
+    this.setAmbience(away);
+  }
+
+  /** Crickets (or wind and sea) outside; faint indoors; the engines below decks on a ship. */
+  private setAmbience(away: boolean): void {
+    const cam = this.gfx.camera;
     const zone = this.world.zoneAt({ x: cam.position.x, y: cam.position.y, z: cam.position.z });
-    const outdoors = !zone || /grounds|roof/i.test(zone.floor) || /terrace|balcony/i.test(zone.name);
-    this.ambience?.set((outdoors ? 0.55 : 0.12) * (away ? 0.4 : 1));
+    const outdoors = !zone || /grounds|roof|outside/i.test(zone.floor) || /terrace|balcony|deck|promenade|walkway|yard|quay|compound|^terminal$|car park|road|reefer|staff gate|truck gate/i.test(zone.name);
+    const below = zone && /^Deck 2/.test(zone.floor) ? 1 : 0;
+    this.ambience?.set((outdoors ? 0.55 : below ? 0.4 : 0.12) * (away ? 0.4 : 1), below);
   }
 
   // ---------- Cutscenes ----------
@@ -403,8 +428,20 @@ export class Game {
     this.cutsceneUi.show();
   }
 
+  /**
+   * A closing scene at the end of a mission: plays like an intro (skippable), then `then` runs
+   * (which normally ends the match).
+   */
+  playOutro(scene: Cutscene, then: () => void): void {
+    this.outroThen = then;
+    this.hud.hide();
+    this.beginCutscene(scene);
+  }
+  private outroThen: (() => void) | null = null;
+
   private skipCutscene(): void {
     if (this.cutscene) this.cutsceneTime = this.cutscene.duration;
+    this.voice.stopRadio();
     this.input.jumpBlocked = true; // the Space that skipped mustn't also jump
   }
 
@@ -462,6 +499,14 @@ export class Game {
     this.cutsceneActor = null;
     this.gfx.camera.layers.disable(LAYER_CCTV_ONLY);
     this.cutsceneUi.hide();
+    const outro = this.outroThen;
+    this.outroThen = null;
+    if (outro) {
+      scene.finish();
+      scene.dispose();
+      if (handOver) outro();
+      return;
+    }
     if (!handOver) return;
     scene.finish();
     const p = this.player;
@@ -487,7 +532,7 @@ export class Game {
   private pause(): void {
     this.state = 'paused';
     this.input.clearActions();
-    this.menu.showPause(this.mode?.pauseInfo() ?? '');
+    this.menu.showPause(this.mode?.pauseInfo() ?? '', this.mode?.pauseDetails?.() ?? '');
   }
 
   private onPointerLockChange(locked: boolean): void {
@@ -567,6 +612,12 @@ export class Game {
     this.audio.zap();
   }
 
+  /** Undercover clothes over the player's look (null: their own kit). Rebuilds body and arms. */
+  setOutfit(outfit: CivilianStyle | null): void {
+    characterLook.outfit = outfit;
+    this.onLookChanged();
+  }
+
   /** The player changed their character's look: rebuild the body and the first-person arms. */
   onLookChanged(): void {
     this.gfx.scene.remove(this.avatar.group);
@@ -577,7 +628,8 @@ export class Game {
 
   /** The equipped weapon (or its attachments) changed: the body holds the same gun. */
   onWeaponChanged(id: WeaponId, def: WeaponDef): void {
-    this.avatar?.setWeapon(id, def.loadout ?? {});
+    if (this.weapons?.holstered) this.avatar?.clearWeapon?.();
+    else this.avatar?.setWeapon(id, def.loadout ?? {});
     this.hud.setWeaponSlots(this.weapons.carried.map(w => WEAPONS[w].name), this.weapons.carried.indexOf(id));
   }
 
@@ -642,7 +694,15 @@ export class Game {
     const buttons = this.input.buttons();
     const sprinting = isSprinting(buttons);
     if (this.flying) this.fly(buttons, dt);
-    else stepMovement(p, { buttons, yaw: p.yaw }, dt, this.world.colliders, this.world.water);
+    else {
+      const falling = p.onGround ? 0 : -p.vel.y;
+      stepMovement(p, { buttons, yaw: p.yaw }, dt, this.world.colliders, this.world.water);
+      // Landing from a jump or a drop: a heavier footfall (and the next step a beat later).
+      if (falling > 4 && p.onGround && !p.swimming && this.state === 'playing') {
+        this.audio.step(this.world.surfaceAt(p.pos), Math.min(1.4, falling / 7));
+        this.stepTimer = 0.3;
+      }
+    }
     if (this.elapsed - p.lastHurt > REGEN_DELAY && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + REGEN_PER_SECOND * dt);
     this.updateWater(dt);
     if (this.state !== 'playing') return;
@@ -669,14 +729,17 @@ export class Game {
     this.pickupTarget = this.world.pickups.target(cam.position, look);
     const modePrompt = this.mode?.prompt?.() ?? null;
     this.hud.prompt(modePrompt ?? (this.pickupTarget ? `<kbd>E</kbd>Pick up ${escapeHtml(this.pickupTarget.name)}` : ''));
-    // Footsteps carry: sprinting is loud, walking is quiet, crouching and crawling are silent.
-    if (p.onGround && p.horizontalSpeed > 1 && p.stance === 'stand') {
+    // Footsteps: you hear your own on whatever's underfoot. They carry to the guards too: sprinting
+    // is loud, walking quiet, crouching and crawling silent (and only just audible to you).
+    if (p.onGround && !p.swimming && p.horizontalSpeed > 1) {
       this.stepTimer -= dt;
       if (this.stepTimer <= 0) {
-        this.stepTimer = 0.45;
-        this.actors?.noise(new THREE.Vector3(p.pos.x, p.pos.y + 0.2, p.pos.z), sprinting ? 8 : 2.5, 'footsteps');
+        const standing = p.stance === 'stand';
+        this.stepTimer = !standing ? 0.6 : sprinting ? 0.32 : p.horizontalSpeed < 4 ? 0.52 : 0.42;
+        this.audio.step(this.world.surfaceAt(p.pos), !standing ? 0.18 : sprinting ? 1 : 0.6);
+        if (standing) this.actors?.noise(new THREE.Vector3(p.pos.x, p.pos.y + 0.2, p.pos.z), sprinting ? 8 : 2.5, 'footsteps');
       }
-    }
+    } else this.stepTimer = Math.min(this.stepTimer, 0.12);
     this.bots.update(dt, true);
     this.fx.update(dt);
     this.hud.update(dt, {
@@ -684,8 +747,8 @@ export class Game {
       breath: p.breath,
       underwater: p.headUnderwater,
       hp: p.hp,
-      weaponName: w.name,
-      ammo: this.weapons.ammo,
+      weaponName: !this.weapons.holstered ? w.name : this.weapons.carried.length ? `${w.name} · holstered` : 'Unarmed',
+      ammo: this.weapons.holstered && !this.weapons.carried.length ? -1 : this.weapons.ammo,
       magazine: w.magazine,
       reloading: this.weapons.reloading,
       elapsed: this.elapsed,

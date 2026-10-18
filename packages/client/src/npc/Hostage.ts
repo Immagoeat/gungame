@@ -24,6 +24,9 @@ export class Hostage implements Body, OtherTarget {
   freed = false;
   /** Seconds since shooting nearby: he keeps his head down. */
   scared = 0;
+  readonly maxHp = 160;
+  /** Seconds since he was last hit (he gets his breath back, like you). */
+  private sinceHurt = 99;
   private path: Vec3[] = [];
   private pathIndex = 0;
   private repath = 0;
@@ -58,6 +61,12 @@ export class Hostage implements Body, OtherTarget {
   hurt(amount: number): void {
     this.hp -= amount;
     this.scared = 6;
+    this.sinceHurt = 0;
+  }
+
+  /** Ducking makes him a smaller target, moving a harder one. */
+  get exposure(): number {
+    return this.crouch > 0.5 ? 0.6 : this.speed > 1 ? 0.8 : 1;
   }
 
   free(nav?: NavGrid): void {
@@ -74,6 +83,8 @@ export class Hostage implements Body, OtherTarget {
   update(dt: number, player: THREE.Vector3, nav: NavGrid, colliders: readonly AABB[], danger: boolean): void {
     if (danger) this.scared = Math.max(this.scared, 3);
     this.scared = Math.max(0, this.scared - dt);
+    this.sinceHurt += dt;
+    if (this.alive && this.sinceHurt > 7) this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
     let moving = false;
     if (this.freed && this.alive) {
       const me = this.position;

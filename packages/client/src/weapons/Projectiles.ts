@@ -34,7 +34,7 @@ const EPS = 0.003;
 
 const IMPACT: Partial<Record<BlockMaterial, ImpactKind>> = {
   plaster: 'plaster', ceiling: 'plaster', trim: 'plaster',
-  metal: 'metal', steel: 'metal', gold: 'metal', ironGate: 'metal', windowFrame: 'metal', carPaint: 'metal', serverRack: 'metal', screen: 'metal',
+  metal: 'metal', steel: 'metal', hull: 'metal', deckPaint: 'metal', brass: 'metal', teak: 'wood', paneling: 'wood', casinoCarpet: 'soft', gold: 'metal', ironGate: 'metal', windowFrame: 'metal', carPaint: 'metal', serverRack: 'metal', screen: 'metal',
   wood: 'wood', darkWood: 'wood', crate: 'wood', crateLight: 'wood', crateGreen: 'wood', books: 'wood', palmTrunk: 'wood',
   fabric: 'soft', leather: 'soft', carpet: 'soft', painting: 'soft', rubber: 'soft',
   grass: 'foliage', hedge: 'foliage',
@@ -222,6 +222,11 @@ export class Projectiles {
       b.speed = exitSpeed(b.speed, PENETRATION_RESISTANCE.glass, thickness);
       b.pos.addScaledVector(b.dir, thickness + EPS);
       return b.speed > 0;
+    }
+    // Invisible barriers only keep bodies in.
+    if (info?.material === 'barrier') {
+      b.pos.addScaledVector(b.dir, thickness + EPS);
+      return true;
     }
     const resistance = info?.resistance ?? 30;
     const kind: ImpactKind = info ? IMPACT[info.material] ?? (info.invisible ? 'soft' : 'masonry') : 'masonry';

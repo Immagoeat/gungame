@@ -60,6 +60,25 @@ describe('mansion security team', () => {
       if (p.kind === 'hostage') expect(nav.findPath(start, { x: p.x + 1, y: p.y, z: p.z })).not.toBeNull();
     }
   });
+
+  it('the garden door lets you in from the west lawn to the library', () => {
+    const path = nav.findPath({ x: -30, y: G, z: -1 }, { x: -18, y: G, z: -1 });
+    expect(path).not.toBeNull();
+    // Straight through the door, not round the house.
+    expect(path!.reduce((n, p, i) => n + (i ? Math.hypot(p.x - path![i - 1].x, p.z - path![i - 1].z) : 0), 0)).toBeLessThan(16);
+  });
+
+  it('every lead can be walked up to', () => {
+    const start = { x: 0.9, y: G, z: 35.2 };
+    for (const p of map.props) {
+      if (p.kind !== 'clue') continue;
+      // Clues sit on furniture: somewhere on the floor within reach of it.
+      const floor = MANSION_LEVELS.filter(l => l <= p.y + 0.01).at(-1)!;
+      const n = nav.nearest({ x: p.x, y: floor, z: p.z }, 1.4);
+      expect(n, p.id).toBeGreaterThanOrEqual(0);
+      expect(nav.findPath(start, nav.point(n)), p.id).not.toBeNull();
+    }
+  });
 });
 
 describe('chapter 1 setup', () => {
@@ -71,5 +90,7 @@ describe('chapter 1 setup', () => {
     for (const id of ['extract', 'terminal', 'reinforce-gate']) expect(map.props.some(p => p.kind === 'marker' && p.id === id), id).toBe(true);
     expect(map.props.filter(p => p.kind === 'door' && p.lock === 'keycard').length).toBe(2);
     expect(new Set(guards.map(g => g.kind === 'guard' && g.id)).size).toBe(guards.length);
+    // Enough leads to find Reyes (three are needed, plus the terminal's camera log).
+    expect(map.props.filter(p => p.kind === 'clue').length).toBeGreaterThanOrEqual(4);
   });
 });

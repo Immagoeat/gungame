@@ -284,7 +284,7 @@ export class CharacterAvatar implements Avatar {
       this.gun.quaternion.copy(pitch).multiply(s.gunRotation);
       if (s.hold && s.hold.blend > 0) this.carry(s.hold.kind, s.hold.blend, s.hold.rise);
       this.gun.updateMatrixWorld(true);
-      this.holdGun();
+      this.holdGun(s.hold?.kind !== 'relaxed' || s.hold.blend < 0.5);
       this.ear += ((s.touchEar ?? 0) - this.ear) * (1 - Math.exp(-10 * dt));
       if (this.ear > 0.01) this.touchEar(frame, this.ear);
     } else this.swimStroke(right, forward);
@@ -295,9 +295,10 @@ export class CharacterAvatar implements Avatar {
    * - lowReady: pistol out in front at arm's length, muzzle angled at the ground; rifle with the
    *   stock in the shoulder and the muzzle down.
    * - seated: resting between the knees, muzzle down.
+   * - relaxed: at ease, in the right hand only, hanging by the thigh (pistol) or across the body (rifle).
    * Positions are in the avatar group's space (the gun's parent), from the posed skeleton.
    */
-  private carry(kind: 'lowReady' | 'seated', k: number, rise?: number): void {
+  private carry(kind: 'lowReady' | 'seated' | 'relaxed', k: number, rise?: number): void {
     let { pos, quat } = this.carryPose(kind);
     if (rise !== undefined) {
       const up = this.carryPose('lowReady');
@@ -309,7 +310,7 @@ export class CharacterAvatar implements Avatar {
     this.gun.quaternion.slerp(quat, k);
   }
 
-  private carryPose(kind: 'lowReady' | 'seated'): { pos: THREE.Vector3; quat: THREE.Quaternion } {
+  private carryPose(kind: 'lowReady' | 'seated' | 'relaxed'): { pos: THREE.Vector3; quat: THREE.Quaternion } {
     const toLocal = (v: THREE.Vector3) => this.group.worldToLocal(v);
     const pistol = this.weapon === 'pistol' || this.weapon === 'golden';
     const chest = toLocal(worldPos(bone(this.bones, 'Spine2')));
@@ -317,7 +318,10 @@ export class CharacterAvatar implements Avatar {
     const shoulder = toLocal(worldPos(bone(this.bones, 'RightArm')));
     let pos: THREE.Vector3;
     let rot: THREE.Euler;
-    if (kind === 'seated') {
+    if (kind === 'relaxed') {
+      pos = pistol ? hips.add(new THREE.Vector3(0.23, -0.12, -0.1)) : chest.add(new THREE.Vector3(0.06, -0.34, -0.2));
+      rot = pistol ? new THREE.Euler(-1.4, 0.15, 0, 'YXZ') : new THREE.Euler(-1.15, 0.1, 0.55, 'YXZ');
+    } else if (kind === 'seated') {
       pos = hips.add(new THREE.Vector3(0.02, pistol ? 0.06 : 0.25, -0.36));
       rot = new THREE.Euler(pistol ? -1.25 : 1.35, pistol ? 0.1 : 0.05, 0, 'YXZ');
     } else if (pistol) {
@@ -377,7 +381,8 @@ export class CharacterAvatar implements Avatar {
     }
   }
 
-  private holdGun(): void {
+  /** Hands on the gun: the right on the grip, and the left too unless `both` is false. */
+  private holdGun(both = true): void {
     const gun = this.gunModel!;
     const m = this.gun.matrixWorld;
     const q = this.gun.getWorldQuaternion(new THREE.Quaternion());
@@ -385,6 +390,6 @@ export class CharacterAvatar implements Avatar {
     const toWorld = (v: THREE.Vector3) => v.applyMatrix4(m);
     const turn = (v: THREE.Vector3) => v.applyQuaternion(q);
     reach(this.bones, 'Right', holds.right, toWorld, turn);
-    reach(this.bones, 'Left', holds.left, toWorld, turn);
+    if (both) reach(this.bones, 'Left', holds.left, toWorld, turn);
   }
 }

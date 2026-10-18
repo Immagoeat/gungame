@@ -198,6 +198,58 @@ const tex = {
     scrollingTextures.push({ texture: t, speed: [0.02, 0.015] });
     return t;
   },
+  /** Painted ship steel: plates with faint weld seams. */
+  hull: () => canvasTexture(256, (g, s) => {
+    fill(g, s, '#f4f5f3');
+    g.strokeStyle = 'rgba(0,0,0,.06)';
+    g.lineWidth = 2;
+    for (let y = 0; y < s; y += 64) { g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(s, y + 0.5); g.stroke(); }
+    for (let r = 0; r < 4; r++) for (let x = (r % 2) * 64; x < s; x += 128) { g.beginPath(); g.moveTo(x + 0.5, r * 64); g.lineTo(x + 0.5, r * 64 + 64); g.stroke(); }
+    noise(g, s, 900, 0.03, 2);
+  }),
+  /** Teak decking: long planks with black caulked seams. */
+  teak: () => canvasTexture(256, (g, s) => {
+    fill(g, s, '#a8794a');
+    for (let y = 0; y < s; y += 16) {
+      g.fillStyle = `rgba(${90 + Math.random() * 40},${55 + Math.random() * 25},${25 + Math.random() * 15},.35)`;
+      g.fillRect(0, y, s, 16);
+      g.fillStyle = 'rgba(20,14,8,.85)';
+      g.fillRect(0, y, s, 1.5);
+      g.fillRect(Math.random() * s, y, 1.5, 16);
+    }
+    for (let i = 0; i < 300; i++) {
+      g.strokeStyle = `rgba(60,35,15,${Math.random() * 0.25})`;
+      const y = Math.random() * s;
+      g.beginPath(); g.moveTo(Math.random() * s, y); g.lineTo(Math.random() * s, y + (Math.random() - 0.5) * 2); g.stroke();
+    }
+  }),
+  /** Wood wall panelling: vertical boards with a shadow line between them. */
+  paneling: () => canvasTexture(256, (g, s) => {
+    fill(g, s, '#7a4e2c');
+    for (let x = 0; x < s; x += 32) {
+      g.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,220,180'},${Math.random() * 0.08})`;
+      g.fillRect(x, 0, 32, s);
+      g.fillStyle = 'rgba(25,12,5,.6)';
+      g.fillRect(x, 0, 1.5, s);
+    }
+    for (let i = 0; i < 400; i++) {
+      g.strokeStyle = `rgba(40,20,8,${Math.random() * 0.2})`;
+      const x = Math.random() * s;
+      g.beginPath(); g.moveTo(x, Math.random() * s); g.lineTo(x + (Math.random() - 0.5) * 2, Math.random() * s); g.stroke();
+    }
+  }),
+  /** Casino carpet: a busy burgundy and gold pattern. */
+  casinoCarpet: () => canvasTexture(128, (g, s) => {
+    fill(g, s, '#5a1220');
+    for (let y = 0; y < s; y += 32) for (let x = 0; x < s; x += 32) {
+      g.strokeStyle = 'rgba(214,170,80,.55)';
+      g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x + 16, y + 3); g.lineTo(x + 29, y + 16); g.lineTo(x + 16, y + 29); g.lineTo(x + 3, y + 16); g.closePath(); g.stroke();
+      g.fillStyle = 'rgba(20,60,70,.6)';
+      g.beginPath(); g.arc(x + 16, y + 16, 4, 0, Math.PI * 2); g.fill();
+    }
+    noise(g, s, 800, 0.15, 1);
+  }),
   palmTrunk: () => canvasTexture(64, (g, s) => {
     fill(g, s, '#8a6f4e');
     g.fillStyle = 'rgba(40,25,10,.35)';
@@ -254,6 +306,14 @@ export const MATERIAL_SPECS: Record<BlockMaterial, MaterialSpec> = {
   painting: { color: 0xffffff, texture: tex.painting, uv: 'box', roughness: 0.7 },
   carPaint: { color: 0xffffff, roughness: 0.2, metalness: 0.6 },
   rubber: { color: 0x1e1f21, roughness: 1 },
+
+  hull: { color: 0xffffff, texture: tex.hull, scale: 6, roughness: 0.45, metalness: 0.2, bump: 0.6 },
+  teak: { color: 0xffffff, texture: tex.teak, scale: 4, roughness: 0.75, bump: 2 },
+  deckPaint: { color: 0x7d8a86, texture: tex.speckled('#ffffff', 0.06), scale: 2, roughness: 0.6, bump: 0.8 },
+  paneling: { color: 0xffffff, texture: tex.paneling, scale: 2.4, roughness: 0.5, bump: 1.2 },
+  casinoCarpet: { color: 0xffffff, texture: tex.casinoCarpet, scale: 2.2, roughness: 1, bump: 1 },
+  brass: { color: 0xc9a456, roughness: 0.25, metalness: 1 },
+  barrier: { color: 0xffffff, opacity: 0 },
 };
 
 const textureCache = new Map<BlockMaterial, THREE.Texture>();

@@ -77,8 +77,8 @@ export class CharacterScreen {
       this.resize();
       if (!this.dragging) this.turntable.rotation.y += dt * 0.35;
       this.zoom += (this.zoomTarget - this.zoom) * (1 - Math.exp(-6 * dt));
-      this.camera.position.set(0, THREE.MathUtils.lerp(1.05, 1.56, this.zoom), THREE.MathUtils.lerp(5.2, 1.9, this.zoom));
-      this.camera.lookAt(0, THREE.MathUtils.lerp(0.95, 1.5, this.zoom), 0);
+      this.camera.position.set(0, THREE.MathUtils.lerp(1.05, 1.5, this.zoom), THREE.MathUtils.lerp(5.2, 1.15, this.zoom));
+      this.camera.lookAt(0, THREE.MathUtils.lerp(0.95, 1.47, this.zoom), 0);
       this.avatar?.update(dt, this.state);
       this.renderer!.render(this.scene, this.camera);
       requestAnimationFrame(loop);

@@ -38,4 +38,4 @@ wss.on('connection', socket => {
   });
 });
 
-console.log(`Gun Game server listening on ws://localhost:${port}`);
+console.log(`The Meridian server listening on ws://localhost:${port}`);

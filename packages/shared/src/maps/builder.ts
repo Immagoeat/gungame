@@ -100,6 +100,9 @@ export class MapBuilder {
   readonly blocks: Block[] = [];
   readonly props: PropDef[] = [];
   readonly zones: ZoneDef[] = [];
+  /** Scales every light() added from here on: brightness, and how far it carries. */
+  lightGain = 1;
+  lightReach = 1;
 
   /** Box from two opposite corners. */
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, material: BlockMaterial, tint?: number, invisible = false, resistance?: number): void {
@@ -266,6 +269,11 @@ export class MapBuilder {
     }
   }
 
+  /** An invisible wall that keeps bodies in (bullets and sight lines pass through). */
+  barrier(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
+    this.box(x0, y0, z0, x1, y1, z1, 'barrier', undefined, true);
+  }
+
   /** Glass balustrade with a metal handrail along an axis-aligned line. */
   railing(x0: number, z0: number, x1: number, z1: number, y: number, height = 1.05): void {
     const alongX = Math.abs(z0 - z1) < 1e-6;
@@ -297,7 +305,7 @@ export class MapBuilder {
 
   /** A ceiling light: a point light plus (by default) a visible, shootable fixture just above it. */
   light(x: number, y: number, z: number, color = 0xfff0d8, intensity = 14, distance = 16, fixture = true): void {
-    this.props.push({ kind: 'light', x, y, z, color, intensity, distance, fixture });
+    this.props.push({ kind: 'light', x, y, z, color, intensity: intensity * this.lightGain, distance: distance * this.lightReach, fixture });
   }
 
   palm(x: number, z: number, ground: number, height = 8): void {

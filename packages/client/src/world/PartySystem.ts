@@ -108,6 +108,7 @@ function setupFor(p: GuestProp): GuestSetup {
   let s = p.seed * 7919 + 13;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   const pick = <T,>(a: readonly T[]) => a[Math.floor(r() * a.length) % a.length];
+  if (p.dress === 'worker') return workerSetup(p, r, pick);
   // Staff dress the part; guests are about half in dresses, half in shirts, tees or blazers.
   const staff = p.activity === 'bartender' || p.activity === 'dj';
   const dress = !staff && r() < 0.5;
@@ -124,7 +125,7 @@ function setupFor(p: GuestProp): GuestSetup {
     ...DEFAULT_LOOK,
     skin: pick(LOOK_OPTIONS.skin).id,
     hair: pick(LOOK_OPTIONS.hair).id,
-    face: dress ? 'clean' : pick(['clean', 'clean', 'stubble', 'beard', 'goatee']),
+    face: dress ? 'clean' : pick(['clean', 'clean', 'stubble', 'short', 'beard', 'goatee', 'moustache']),
     headgear: p.activity === 'dj' ? 'cap' : 'none',
     vest: 'none',
     gloves: 'none',
@@ -140,5 +141,31 @@ function setupFor(p: GuestProp): GuestSetup {
     seat: p.seat,
     crew: p.crew,
     drink: drinkable ? pick(['flute', 'flute', 'wine', 'tumbler'] as const) : undefined,
+  };
+}
+
+/** The night shift at the port: work clothes under hi-vis vests, hard hats on, nothing in their hands. */
+function workerSetup(p: GuestProp, r: () => number, pick: <T>(a: readonly T[]) => T): GuestSetup {
+  const style: CivilianStyle = {
+    top: pick(['tee', 'shirt'] as const),
+    topColor: pick([0x2b3440, 0x3a3a36, 0x1d2a44, 0x4a3b2a, 0x2e3a2e]),
+    bottomColor: pick([0x1d2a44, 0x2a2a2c, 0x3b3a34]),
+    accent: pick([0xd8e637, 0xf27a1a, 0xd8e637]),
+    shoes: 0x1a1612,
+    hairStyle: pick(['short', 'buzz'] as const),
+    hiVis: true,
+    hardHat: p.activity !== 'sit',
+  };
+  const look: CharacterLook = {
+    ...DEFAULT_LOOK,
+    skin: pick(LOOK_OPTIONS.skin).id,
+    hair: pick(LOOK_OPTIONS.hair).id,
+    face: pick(['clean', 'stubble', 'short', 'beard', 'moustache', 'stubble']),
+    headgear: 'none', vest: 'none', gloves: 'none',
+  };
+  return {
+    activity: p.activity, seed: p.seed, height: 1.7 + r() * 0.16, look, style,
+    lookAt: p.lookAt ? new THREE.Vector3(p.lookAt.x, p.lookAt.y, p.lookAt.z) : undefined,
+    seat: p.seat, crew: p.crew, drink: undefined,
   };
 }

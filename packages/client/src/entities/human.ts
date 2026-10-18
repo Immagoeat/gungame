@@ -79,30 +79,57 @@ const rbox = (w: number, h: number, d: number, r: number) =>
 export type AddPart = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material,
   x: number, y: number, z: number, rot?: [number, number, number], scale?: [number, number, number]) => THREE.Mesh;
 
+/** Radius of the sphere the head is sculpted from. */
+export const HEAD_R = 0.1;
+
+/**
+ * Sculpts a point on the head's base sphere (radius HEAD_R, centred on the head) into the face's shape.
+ * Facial hair grows off the same surface, so it's shared.
+ */
+export function shapeHead(v: THREE.Vector3): THREE.Vector3 {
+  const R = HEAD_R;
+  const ny = v.y / R;
+  const front = v.z < 0 ? -v.z / R : 0;
+  v.y *= 1.17;
+  // Narrow the jaw and chin, square off the chin a touch, push the face forward.
+  if (ny < 0) {
+    const t = -ny;
+    v.x *= 1 - 0.22 * t * t;
+    v.z *= 1 - 0.1 * t;
+    if (front > 0.4 && ny < -0.55) v.z -= 0.012 * (t - 0.55) * front * 4;
+  }
+  // Cheekbones and brow ridge, blended in smoothly (hard steps show as ledges).
+  const bump = (x: number, a: number, b: number) => {
+    const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
+    return Math.sin(t * Math.PI) ** 2;
+  };
+  v.x *= 1 + 0.04 * bump(ny, -0.3, 0.1) * THREE.MathUtils.smoothstep(front, 0.35, 0.65);
+  v.z -= 0.006 * bump(ny, 0.12, 0.48) * THREE.MathUtils.smoothstep(front, 0.55, 0.85);
+  // Slightly flatter sides and back.
+  v.x *= 0.88;
+  if (v.z > 0) v.z *= 0.95;
+  // Eye sockets, so the eyes sit in the face rather than under it.
+  if (v.z < -0.05) {
+    for (const s of [-1, 1]) {
+      const e = ((v.x - s * 0.031) / 0.02) ** 2 + ((v.y - 0.014) / 0.0125) ** 2;
+      if (e < 1) v.z += 0.0165 * (1 - e) ** 1.6;
+    }
+  }
+  return v;
+}
+
 /** Sculpted head facing -z: jaw, chin, cheekbones, eyes, brows, nose, lips, ears and hair. Origin at the base of the skull. */
-export function buildHead(parent: THREE.Object3D, add: AddPart, m: HumanMaterials): void {
-  const R = 0.1;
-  const geo = new THREE.SphereGeometry(R, 40, 30);
+/** Segments around and down the head: fine for close-ups, coarser for crowds. */
+export const HEAD_DETAIL = { high: [72, 54], low: [48, 36] } as const;
+
+export function buildHead(parent: THREE.Object3D, add: AddPart, m: HumanMaterials, detail: keyof typeof HEAD_DETAIL = 'high'): void {
+  const R = HEAD_R;
+  const geo = new THREE.SphereGeometry(R, ...HEAD_DETAIL[detail]);
   const pos = geo.getAttribute('position');
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    const ny = v.y / R;
-    const front = v.z < 0 ? -v.z / R : 0;
-    v.y *= 1.17;
-    // Narrow the jaw and chin, square off the chin a touch, push the face forward.
-    if (ny < 0) {
-      const t = -ny;
-      v.x *= 1 - 0.22 * t * t;
-      v.z *= 1 - 0.1 * t;
-      if (front > 0.4 && ny < -0.55) v.z -= 0.012 * (t - 0.55) * front * 4;
-    }
-    // Cheekbones and brow ridge.
-    if (front > 0.5 && ny > -0.25 && ny < 0.05) v.x *= 1.04;
-    if (front > 0.7 && ny > 0.2 && ny < 0.42) v.z -= 0.006;
-    // Slightly flatter sides and back.
-    v.x *= 0.88;
-    if (v.z > 0) v.z *= 0.95;
+    shapeHead(v);
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   geo.computeVertexNormals();
@@ -112,13 +139,13 @@ export function buildHead(parent: THREE.Object3D, add: AddPart, m: HumanMaterial
   for (const s of [-1, 1]) {
     const ex = s * 0.031;
     // Eyeball set back into the socket so only an almond of it shows, iris and pupil on its surface.
-    add(parent, new THREE.SphereGeometry(0.0115, 16, 12), m.eyeWhite, ex, 0.124, -0.077, undefined, [1, 0.72, 0.9]);
+    add(parent, new THREE.SphereGeometry(0.0115, 16, 12), m.eyeWhite, ex, 0.124, -0.077, undefined, [1, 0.62, 0.9]);
     add(parent, new THREE.CylinderGeometry(0.0058, 0.0058, 0.0016, 18), m.iris, ex, 0.124, -0.0873, [Math.PI / 2, 0, 0]);
     add(parent, new THREE.CylinderGeometry(0.0026, 0.0026, 0.0018, 12), m.pupil, ex, 0.124, -0.0879, [Math.PI / 2, 0, 0]);
     // Upper lid and a soft crease above it.
     add(parent, new THREE.TorusGeometry(0.0115, 0.0022, 6, 16, Math.PI), m.skin, ex, 0.1245, -0.0855, [0, 0, 0], [1, 0.75, 1]);
     add(parent, new THREE.TorusGeometry(0.011, 0.0015, 6, 16, Math.PI), m.skin, ex, 0.1235, -0.0858, [0, 0, Math.PI], [1, 0.45, 1]);
-    add(parent, rbox(0.032, 0.006, 0.01, 0.003), m.brow, ex, 0.146, -0.087, [0.15, 0, s * -0.12]);
+    add(parent, rbox(0.032, 0.006, 0.01, 0.003), m.brow, ex, 0.139, -0.09, [0.15, 0, s * -0.1]);
     add(parent, new THREE.SphereGeometry(0.027, 14, 10), m.skin, s * 0.088, 0.11, 0.004, undefined, [0.3, 1, 0.65]);
     add(parent, new THREE.TorusGeometry(0.016, 0.003, 6, 14, Math.PI * 1.3), m.skin, s * 0.092, 0.112, 0.004, [0, s * Math.PI / 2, 0.6]);
   }
@@ -130,7 +157,7 @@ export function buildHead(parent: THREE.Object3D, add: AddPart, m: HumanMaterial
   add(parent, rbox(0.036, 0.008, 0.012, 0.004), m.lips, 0, 0.064, -0.092);
   add(parent, rbox(0.032, 0.009, 0.012, 0.0045), m.lips, 0, 0.056, -0.09);
   // Hair: short and textured, hairline high at the temples, fuller on top, tapered at the back.
-  const hair = new THREE.SphereGeometry(R * 1.03, 36, 20, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  const hair = new THREE.SphereGeometry(R * 1.045, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.5);
   const hp = hair.getAttribute('position');
   for (let i = 0; i < hp.count; i++) {
     v.fromBufferAttribute(hp, i);

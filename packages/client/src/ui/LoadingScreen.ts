@@ -22,6 +22,15 @@ const TIPS = [
   'Customize every gun in the Armory, and your soldier on the Character screen.',
   'Number keys or the mouse wheel switch weapons; Q swaps back to the last one.',
   'Broken glass crunches underfoot, and breaks up further as you walk over it.',
+  'Guards talk when they think nobody is listening. Stay close, and stay out of sight.',
+  'A camera that suddenly goes dark gets noticed. Looping the feeds from the security room is quieter.',
+  'Take guards down from behind (E), then drag the body (E) somewhere nobody will look.',
+  'Walking is quiet, sprinting is not. Crouched, you make no sound at all.',
+  'Tag guards (T) and they stay marked through walls, coloured by how alert they are.',
+  'A coin (G) draws one guard to look, without raising the alarm. Use it to open a gap.',
+  'A body in a wardrobe or a locker is never found. Drag it there (E), then E again.',
+  'The tactical map (M) shows every floor, the cameras, the doors and the guards you have tagged.',
+  "When the house locks down, only some of Castell's men come for you. The rest hold their posts.",
 ];
 
 /**

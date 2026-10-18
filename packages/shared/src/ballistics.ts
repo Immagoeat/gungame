@@ -18,6 +18,7 @@ export const PENETRATION_RESISTANCE: Record<BlockMaterial, number> = {
   glass: 4, helipad: 40, trim: 6, windowFrame: 40, cobble: 60, travertine: 40,
   darkWood: 9, metal: 90, steel: 150, gold: 200, fabric: 2, leather: 3, books: 12, screen: 20,
   serverRack: 40, painting: 3, carPaint: 40, rubber: 5,
+  hull: 160, teak: 30, deckPaint: 60, paneling: 7, casinoCarpet: 3, brass: 60, barrier: 0,
 };
 
 /** Resistance of a body (per cm). A torso is roughly 30 cm of it. */

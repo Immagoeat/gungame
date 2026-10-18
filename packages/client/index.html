@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Gun Game</title>
+<title>The Meridian</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
@@ -41,11 +41,19 @@
   <div id="banner"></div>
   <div id="prompt"></div>
   <div id="mission">
-    <div id="objective"><div id="objTitle"></div><div id="objText"></div><div id="objSub"></div></div>
-    <div id="alarm" class="undetected">UNDETECTED</div>
+    <div id="objCol">
+      <div id="objective"><div id="objTitle"></div><div id="objText"></div><div id="objSub"></div><ul id="objLeads"></ul></div>
+      <div id="alarm" class="undetected">UNDETECTED</div>
+    </div>
+    <div id="intel"><div class="intel-from"></div><div class="intel-title"></div><div class="intel-body"></div></div>
     <div id="detect"></div>
+    <div id="restricted"><div class="rz-edge"></div><div class="rz-card"><b>RESTRICTED AREA</b><span id="rzText"></span></div></div>
     <div id="waypoint"><div class="wp-diamond"></div><div id="wpLabel"></div></div>
     <div id="radio"></div>
+    <div id="dialogue"></div>
+    <div id="tags"></div>
+    <div id="gadgets"></div>
+    <div id="tacmap"><div class="tm-head"><b>TACTICAL MAP</b><span id="tmFloor"></span><span class="tm-keys">↑ ↓ floors · M close</span></div><canvas id="tmCanvas"></canvas><div class="tm-legend" id="tmLegend"></div></div>
   </div>
   <div id="health" class="panel"><div class="label">HEALTH <span id="stance"></span></div><div class="num" id="hpNum">100</div><div class="bar"><div class="fill" id="hpFill"></div></div>
     <div class="bar breath" id="breathBar"><div class="fill" id="breathFill"></div></div></div>
@@ -55,9 +63,9 @@
 
 <div id="overlay">
   <div class="screen" id="scr-main">
-    <h1 class="logo">GUN<br>GAME</h1>
+    <h1 class="logo">THE<br>MERIDIAN</h1>
     <div class="version" id="version"></div>
-    <p class="tagline">Every kill upgrades your weapon. Land a kill with the Golden Gun to win.</p>
+    <p class="tagline">Five families. One table. Take it apart.</p>
     <div class="menu-list">
       <button class="mbtn primary" data-go="modes">Play</button>
       <button class="mbtn" data-go="armory">Armory</button>
@@ -151,11 +159,14 @@
       <span><kbd>R</kbd></span><span>Reload</span>
       <span><kbd>1</kbd>-<kbd>9</kbd> <kbd>Wheel</kbd></span><span>Switch weapon (when carrying more than one)</span>
       <span><kbd>Q</kbd></span><span>Swap to last weapon</span>
-      <span><kbd>E</kbd></span><span>Pick up / use</span>
+      <span><kbd>E</kbd></span><span>Pick up / use · take down from behind · drag a body (E again by a wardrobe or locker hides it) · hold to pick locks and read clues</span>
+      <span><kbd>T</kbd></span><span>Campaign: tag the guard under your crosshair (tracked through walls)</span>
+      <span><kbd>G</kbd></span><span>Campaign: throw a coin (the nearest guard at ease goes to look)</span>
+      <span><kbd>M</kbd></span><span>Campaign: tactical map (<kbd>↑</kbd> <kbd>↓</kbd> change floor)</span>
       <span><kbd>F</kbd></span><span>Weapon light on/off</span>
       <span><kbd>Esc</kbd></span><span>Pause</span>
-      <span><kbd>V</kbd></span><span>Fly mode (campaign layout preview)</span>
-      <span><kbd>[</kbd> <kbd>]</kbd></span><span>Change time of day (campaign layout preview)</span>
+      <span><kbd>V</kbd></span><span>Fly mode (development builds)</span>
+      <span><kbd>[</kbd> <kbd>]</kbd></span><span>Change time of day (development builds)</span>
       <span><kbd>F11</kbd></span><span>Toggle fullscreen</span>
     </div>
     <button class="mbtn back" data-back>‹ Back</button>
@@ -164,6 +175,8 @@
   <div class="screen" id="scr-pause">
     <h2 class="big">PAUSED</h2>
     <p class="sub" id="pauseInfo"></p>
+    <div class="pause-body">
+    <div id="pauseDetails"></div>
     <div class="menu-list">
       <button class="mbtn primary" id="resumeBtn">Resume</button>
       <button class="mbtn" data-go="armory">Armory</button>
@@ -172,6 +185,7 @@
       <button class="mbtn" data-go="howto">How to Play</button>
       <button class="mbtn" id="toMenuBtn">Quit to Main Menu</button>
     </div>
+    </div>
     <div class="hint" data-hint></div>
   </div>
 
@@ -179,6 +193,7 @@
     <h2 class="big" id="overTitle"></h2>
     <p class="sub" id="overSub"></p>
     <div class="stats-grid" id="overStats"></div>
+    <div id="overExtra"></div>
     <div class="menu-list">
       <button class="mbtn primary" id="againBtn">Play Again</button>
       <button class="mbtn" id="overMenuBtn">Main Menu</button>

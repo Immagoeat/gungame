@@ -7,7 +7,7 @@ async function start(): Promise<void> {
   // Character and weapon models load before anything that uses them is built.
   const loading = document.createElement('div');
   loading.id = 'loading';
-  loading.innerHTML = '<div class="loading-title">GUN GAME</div><div class="loading-bar"><span></span></div>';
+  loading.innerHTML = '<div class="loading-title">THE MERIDIAN</div><div class="loading-bar"><span></span></div>';
   document.body.appendChild(loading);
   const bar = loading.querySelector('span')!;
   await preloadModels((done, total) => { bar.style.width = `${(done / total) * 100}%`; });

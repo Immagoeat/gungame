@@ -27,6 +27,8 @@ export interface Block {
  * yaw 0 faces -z (north), positive yaw turns left; pitch < 0 looks down.
  */
 /** groove: chatting by the dance floor, moving to the music while they talk. */
+export type ClueModel = 'laptop' | 'ticket' | 'phone' | 'zipties' | 'ledger' | 'listen' | 'uniform' | 'decanter' | 'vial' | 'charge' | 'bag';
+
 export type GuestActivity = 'dance' | 'groove' | 'chat' | 'drink' | 'dj' | 'bartender' | 'sit';
 
 export type PropDef =
@@ -57,14 +59,24 @@ export type PropDef =
     carries?: string;
     /** Display name for a named guard. */
     name?: string;
-    look?: 'suit' | 'tactical' | 'chief';
+    /** suit: private security in black; chief: their boss; tactical: armour; crew: a ship's security officer in uniform; port: terminal security (navy, hi-vis). */
+    look?: 'suit' | 'tactical' | 'chief' | 'crew' | 'port';
+    /** At ease while on post (weapon down, chatting) until something alarms them. */
+    relaxed?: boolean;
   }
-  /** A door in a doorway. `axis` is the direction the door's width runs. Locked doors need a key item. */
+  /** A door in a doorway. `axis` is the direction the door's width runs. Locked doors need a key item, or `lock: 'pick'` can be picked. */
   | { kind: 'door'; id: string; x: number; y: number; z: number; axis: 'x' | 'z'; width: number; height: number; lock?: string; open?: boolean }
   /** A mission character waiting somewhere (the hostage), seated, facing yaw. */
   | { kind: 'hostage'; id: string; x: number; y: number; z: number; yaw: number; seat: number }
+  /** A named character the mission drives (someone to talk to), standing or seated (`seat` height above y). */
+  | { kind: 'character'; id: string; x: number; y: number; z: number; yaw: number; seat?: number }
   /** A named place the mission uses (extraction point, reinforcement spawn, ...). */
   | { kind: 'marker'; id: string; x: number; y: number; z: number; yaw?: number }
+  /**
+   * Something the mission lets you examine for information (hold E): a laptop, a note, a phone.
+   * `listen` has no model: it's a spot to overhear a conversation from.
+   */
+  | { kind: 'clue'; id: string; x: number; y: number; z: number; yaw: number; model: ClueModel }
   /** A weapon lying in the world; picking it up (E) unlocks it for good. */
   | { kind: 'weaponPickup'; x: number; y: number; z: number; yaw: number; weapon: WeaponId }
   | {
@@ -81,6 +93,8 @@ export type PropDef =
     crew?: number;
     /** Seat height above y, for 'sit'. */
     seat?: number;
+    /** Work clothes (hi-vis and a hard hat) instead of party clothes. */
+    dress?: 'worker';
   }
   | {
     kind: 'furniture'; type: FurnitureType; x: number; y: number; z: number; yaw: number;
@@ -113,4 +127,8 @@ export interface MapDef {
   spawnYaw: number;
   /** Hour of the day (0-24) the map starts at. */
   timeOfDay?: number;
+  /** Scenery beyond the playable area, drawn by the client (neighbours and hills; the open sea round a ship). */
+  backdrop?: 'beverlyHills' | 'openSea' | 'harbour';
+  /** No ground plane (a ship at sea: everything you stand on is blocks). */
+  noGround?: boolean;
 }

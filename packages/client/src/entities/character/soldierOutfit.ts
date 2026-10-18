@@ -5,6 +5,7 @@ import { normalMapFrom } from '../../world/normalMaps';
 import { canvasTexture } from '../../world/textures';
 import { DEFAULT_LOOK, lookKey, lookOption, type CharacterLook } from '@gungame/shared';
 import { buildHead, humanMaterials, type AddPart, type HumanMaterials } from '../human';
+import { FACIAL_HAIR, facialHairGeometry } from './facialHair';
 import { bone, boneName, worldPos, type BoneMap } from './rig';
 
 /**
@@ -30,6 +31,10 @@ export interface CivilianStyle {
   accent?: number;
   shoes: number;
   hairStyle: 'short' | 'long' | 'bun' | 'buzz';
+  /** A high-visibility vest over the top, in the accent colour, with reflective bands. */
+  hiVis?: boolean;
+  /** A white hard hat. */
+  hardHat?: boolean;
 }
 
 export function dressSoldier(model: THREE.Object3D, look: CharacterLook = DEFAULT_LOOK, civ?: CivilianStyle): void {
@@ -63,7 +68,7 @@ const cache = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.
 function outfit(model: THREE.Object3D, boneList: THREE.Bone[], look: CharacterLook, civ?: CivilianStyle): { geometry: THREE.BufferGeometry; material: THREE.Material }[] {
   // A guest's geometry depends only on its shape (cut, hair style, facial hair); colours come from a
   // per-guest palette (see crowdMaterial), so many guests share one generated body.
-  const key = civ ? `civ:${civ.top}:${civ.hairStyle}:${look.face}:${look.headgear}:${civ.accent !== undefined}` : lookKey(look);
+  const key = civ ? `civ:${civ.top}:${civ.hairStyle}:${look.face}:${look.headgear}:${civ.accent !== undefined}:${!!civ.hiVis}:${!!civ.hardHat}` : lookKey(look);
   const cached = cache.get(key);
   if (cached) return cached;
   const bones: BoneMap = new Map();
@@ -317,7 +322,7 @@ function outfit(model: THREE.Object3D, boneList: THREE.Bone[], look: CharacterLo
     ? { ...base, skin: mats.skin, hair: mats.hair, brow: mats.brow, lips: mats.lips, eyeWhite: ROLE.eyeWhite, iris: ROLE.iris, pupil: ROLE.pupil }
     : { ...base, skin: mats.skin, hair: mats.hair, brow: mats.brow, lips: mats.lips };
   // Hats and helmets cover the hair (it would poke through).
-  const hideHair = look.headgear !== 'none';
+  const hideHair = look.headgear !== 'none' || !!civ?.hardHat;
   const addHead: AddPart = (parent, geo, mat, x, y, z, rot, scale) => {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
@@ -328,27 +333,12 @@ function outfit(model: THREE.Object3D, boneList: THREE.Bone[], look: CharacterLo
   };
   headGroup.position.copy(toLocal(headGroup.position));
   headGroup.scale.setScalar(headScale * unit);
-  buildHead(headGroup, addHead, hm);
-  // Facial hair: shells hugging the jaw, upper lip and chin.
-  if (look.face !== 'clean') {
-    const beardMat = look.face === 'stubble' ? mats.stubble : mats.hair;
-    const full = look.face === 'beard' || look.face === 'stubble';
-    const jaw = new THREE.SphereGeometry(0.104, 28, 16, 0, Math.PI * 2, Math.PI * 0.52, Math.PI * 0.4);
-    const jp = jaw.getAttribute('position');
-    const q = new THREE.Vector3();
-    for (let i = 0; i < jp.count; i++) {
-      q.fromBufferAttribute(jp, i);
-      const t = -q.y / 0.104;
-      q.x *= (1 - 0.22 * t * t) * 0.9 * (look.face === 'beard' ? 1.06 : 1.0);
-      q.z *= 1 - 0.1 * t;
-      q.y *= 1.17 * (look.face === 'beard' ? 1.08 : 1);
-      jp.setXYZ(i, q.x, q.y, q.z);
-    }
-    jaw.computeVertexNormals();
-    if (full) addHead(headGroup, jaw, beardMat, 0, 0.11, -0.004);
-    else addHead(headGroup, new THREE.SphereGeometry(0.024, 14, 10), beardMat, 0, 0.034, -0.084, undefined, [1, 1.1, 0.7]);
-    // Moustache.
-    addHead(headGroup, new RoundedBoxGeometry(0.05, 0.009, 0.014, 2, 0.004), beardMat, 0, 0.073, -0.096);
+  buildHead(headGroup, addHead, hm, civ ? 'low' : 'high');
+  // Facial hair grows off the face (facialHair.ts); it shows under headgear too.
+  const beard = facialHairGeometry(look.face, civ ? 'low' : 'high');
+  if (beard) {
+    const mesh = addHead(headGroup, beard, FACIAL_HAIR[look.face]!.material === 'stubble' ? mats.stubble : mats.hair, 0, 0.11, 0);
+    mesh.userData.facialHair = true;
   }
   headGroup.updateMatrixWorld(true);
   const H = L('Head');
@@ -356,9 +346,9 @@ function outfit(model: THREE.Object3D, boneList: THREE.Bone[], look: CharacterLo
   for (const child of [...headGroup.children]) {
     if (!(child instanceof THREE.Mesh)) continue;
     // (Sideburns, at ear height, still show.)
-    if (hideHair && child.material === mats.hair && Math.abs(child.position.y - 0.122) > 0.004) continue;
+    if (hideHair && child.material === mats.hair && !child.userData.facialHair && Math.abs(child.position.y - 0.122) > 0.004) continue;
     // A buzz cut: the hair cap only, no tufts.
-    if (civ?.hairStyle === 'buzz' && child.material === mats.hair && child.position.y > 0.15) continue;
+    if (civ?.hairStyle === 'buzz' && child.material === mats.hair && !child.userData.facialHair && child.position.y > 0.15) continue;
     const local = modelInv.clone().multiply(child.matrixWorld);
     builder.rigidLocal(child.geometry, child.material as THREE.Material, local, H);
   }
@@ -384,7 +374,17 @@ function outfit(model: THREE.Object3D, boneList: THREE.Bone[], look: CharacterLo
     g.scale(0.95, 1, 1.08);
     return g;
   };
-  if (look.headgear === 'helmet') {
+  if (civ?.hardHat) {
+    // Hard hat: a ribbed shell over the crown, a peak at the front, a narrow brim round the rest.
+    const hat = ROLE.eyeWhite;
+    builder.rigid(dome(0.122, 0.02), hat, m4(crown.x, crown.y - 0.028, crown.z + 0.006), H);
+    builder.rigid(new THREE.BoxGeometry(0.018, 0.012, 0.2).translate(0, 0, 0), hat, m4(crown.x, crown.y + 0.085, crown.z + 0.006), H);
+    const brim = new THREE.CylinderGeometry(0.135, 0.135, 0.01, 32);
+    brim.scale(0.95, 1, 1.08);
+    builder.rigid(brim, hat, m4(crown.x, crown.y - 0.03, crown.z + 0.006), H);
+    const peak = new THREE.CylinderGeometry(0.11, 0.11, 0.009, 24, 1, false, -Math.PI * 0.3 + Math.PI, Math.PI * 0.6);
+    builder.rigid(peak, hat, m4(crown.x, crown.y - 0.025, crown.z - 0.06, 0.12), H);
+  } else if (look.headgear === 'helmet') {
     // FAST helmet: shell cut high over the ears, rim, side rails, NVG shroud, counterweight, headset.
     const shell = new THREE.SphereGeometry(0.128, 32, 18, 0, Math.PI * 2, 0, Math.PI * 0.52);
     const sp = shell.getAttribute('position');
@@ -715,6 +715,7 @@ function camoTexture(colors: number[]): THREE.CanvasTexture {
 let shared: Omit<SoldierMaterials, 'camo' | 'skin' | 'lips' | 'hair' | 'brow' | 'stubble' | 'glove' | 'boot' | 'capColor'> | null = null;
 let weaveNormal: THREE.Texture | null = null;
 let leatherNormal: THREE.Texture | null = null;
+let stubbleTex: THREE.Texture | null = null;
 const perLook = new Map<string, SoldierMaterials>();
 
 function soldierMaterials(look: CharacterLook): SoldierMaterials {
@@ -732,6 +733,16 @@ function soldierMaterials(look: CharacterLook): SoldierMaterials {
       }
     }, 8);
     weaveNormal = normalMapFrom(weave, 1.2);
+    // Stubble: dense short dark hairs over skin, so it reads as shadow up close rather than paint.
+    stubbleTex = canvasTexture(128, (g, s) => {
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, s, s);
+      for (let i = 0; i < 2600; i++) {
+        g.fillStyle = `rgba(0,0,0,${0.15 + Math.random() * 0.3})`;
+        const x = Math.random() * s, y = Math.random() * s;
+        g.fillRect(x, y, 1, 1 + Math.random() * 1.5);
+      }
+    }, 6);
     const molle = canvasTexture(128, (g, s) => {
       g.fillStyle = '#808080';
       g.fillRect(0, 0, s, s);
@@ -794,7 +805,7 @@ function soldierMaterials(look: CharacterLook): SoldierMaterials {
   const hair = base.hair.clone();
   hair.color.setHex(hairColor);
   // Stubble: skin darkened towards the hair colour.
-  const stubble = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinTone).lerp(new THREE.Color(hairColor), 0.55), roughness: 0.95, normalMap: weaveNormal });
+  const stubble = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinTone).multiplyScalar(0.9).lerp(new THREE.Color(hairColor), 0.22), map: stubbleTex, roughness: 0.9 });
   const gloveOpt = lookOption('gloves', look.gloves);
   const glove = look.gloves === 'none' ? skin
     : new THREE.MeshStandardMaterial({ color: gloveOpt.colors![0], roughness: 0.75, normalMap: leatherNormal, normalScale: new THREE.Vector2(0.8, 0.8) });
@@ -855,6 +866,24 @@ function civilianDetails(
   } else if (c.top === 'shirt') {
     // Button placket.
     builder.rigid(new THREE.BoxGeometry(0.02, 0.4, 0.006), cm.top, m4(spine1.x, spine1.y + 0.08, spine2.z - 0.124, -0.05), L('Spine2'));
+  }
+  if (c.hiVis) {
+    // A hi-vis vest just proud of the top, open at the arms, with two reflective bands and braces over the shoulders.
+    const S1 = L('Spine1'), S2 = L('Spine2');
+    builder.tube([
+      { p: hips.clone().add(new THREE.Vector3(0, 0.02, 0)), rx: 0.172, rz: 0.13, bone: L('Hips') },
+      { p: spine1, rx: 0.172, rz: 0.128, bone: S1 },
+      { p: spine2, rx: 0.19, rz: 0.138, bone: S2 },
+      { p: spine2.clone().lerp(neck, 0.45), rx: 0.165, rz: 0.12, bone: S2 },
+    ], new THREE.Vector3(0, 0, -1), cm.accent);
+    for (const [at, bone, rx, rz] of [[hips.clone().lerp(spine1, 0.55), L('Spine'), 0.174, 0.132], [spine1.clone().lerp(spine2, 0.55), S2, 0.184, 0.136]] as const) {
+      const band = new THREE.CylinderGeometry(1, 1, 0.045, 28, 1, true);
+      band.scale(rx + 0.003, 1, rz + 0.003);
+      builder.rigid(band, mats.metal, m4(at.x, at.y, at.z), bone, true);
+    }
+    for (const sx of [-1, 1]) {
+      builder.rigid(new THREE.BoxGeometry(0.035, 0.2, 0.28), mats.metal, m4(spine2.x + sx * 0.09, (spine2.y + neck.y) / 2 + 0.01, spine2.z), S2);
+    }
   }
 }
 

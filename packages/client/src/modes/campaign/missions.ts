@@ -20,6 +20,34 @@ export const MISSIONS: MissionDef[] = [
     objectives: [],
     story: [],
   },
+  {
+    id: 'aurelia',
+    chapter: 2,
+    title: 'The Aurelia',
+    briefing: "Kessler wasn't just Castell's head of security: he answered to the Meridian, the syndicate behind Castell's money, and his phone holds an invitation to their annual cruise. Go aboard as Marco Navarro, find out who they are, and get to their boss, Augustin Vale. Castell is aboard, hiding under Vale's protection.",
+    location: 'Pacific Ocean, off Los Angeles  ·  22:30',
+    loadingImage: 'images/loading/aurelia.jpg',
+    mapId: 'aurelia',
+    // Security screened you at the gangway: you're aboard with nothing.
+    loadout: [],
+    intro: 'aureliaArrival',
+    objectives: [],
+    story: [],
+  },
+  {
+    id: 'port',
+    chapter: 3,
+    title: 'The Port',
+    briefing: "Vale is dead, and the Meridian are moving their reserve before anyone can come for it: bullion and bearer bonds, packed into one of four containers on the quay at Marseille-Fos, loading tonight on the Sirocco. Get into the terminal with the night shift, find out which box it is, and put a charge on it. Overwatch will set it off when she's out at sea.",
+    location: 'Marseille-Fos, France  ·  02:10',
+    loadingImage: 'images/loading/port.jpg',
+    mapId: 'port',
+    // You come in with nothing: the charge is waiting inside.
+    loadout: [],
+    intro: 'portArrival',
+    objectives: [],
+    story: [],
+  },
 ];
 
 export const getMission = (id: string): MissionDef | undefined => MISSIONS.find(m => m.id === id);

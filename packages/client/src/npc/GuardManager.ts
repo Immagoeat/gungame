@@ -1,3 +1,4 @@
+import type { BarkKind } from '../audio/Voice';
 import * as THREE from 'three';
 import { DIFFICULTIES, raycastBoxes, WEAPONS, type DifficultyId, type PropDef, type WeaponId } from '@gungame/shared';
 import type { Game } from '../core/Game';
@@ -17,13 +18,17 @@ export type GuardEvent =
   | { type: 'killed'; guard: Guard; silent: boolean }
   | { type: 'takedown'; guard: Guard }
   | { type: 'reinforcements'; count: number }
-  | { type: 'shot'; guard: Guard; at: THREE.Vector3 };
+  | { type: 'shot'; guard: Guard; at: THREE.Vector3 }
+  /** Something a guard says out loud (the mission voices it). */
+  | { type: 'bark'; guard: Guard; kind: BarkKind; at: THREE.Vector3 };
 
 /** Someone else the guards might shoot at (a freed hostage). */
 export interface OtherTarget {
   readonly position: THREE.Vector3;
   alive: boolean;
   hurt(amount: number): void;
+  /** How easy a target they make right now (0..1): ducking, running. */
+  readonly exposure?: number;
 }
 
 const VIEW_HALF_ANGLE = THREE.MathUtils.degToRad(58);
@@ -33,6 +38,10 @@ const ALERT_COOLDOWN = 55;
 const SUSPICION_COOLDOWN = 50;
 const REINFORCE_INTERVAL = 70;
 const CAMERA_RANGE = 26;
+/** Undercover: seconds a guard gives you to leave after warning you off. */
+const WARN_GRACE = 4.5;
+/** Damage taken by someone else they shoot at (the hostage keeps his head down). */
+const OTHER_DAMAGE = 0.7;
 
 /**
  * Runs the security team: patrols and posts, what each guard sees and hears (you, bodies, noises,
@@ -46,6 +55,15 @@ export class GuardManager {
   onEvent: (e: GuardEvent) => void = () => {};
   /** Freed hostage etc. that guards may also shoot. */
   others: OtherTarget[] = [];
+  /**
+   * Undercover (set by the mission): how suspicious you look to a guard right now. `rate` scales how
+   * fast they notice you (0: you blend in and they don't care); their awareness can't pass `cap`
+   * (below 1 they'll come and look, not fight); `trespass` means they warn you off first and give you
+   * WARN_GRACE seconds to leave. Not consulted once a guard is fighting.
+   */
+  suspicion: ((g: Guard) => { rate: number; cap: number; trespass: boolean }) | null = null;
+  /** Undercover: how much the cameras care about what they see (0: nothing to see here). */
+  cameraSuspicion: (() => number) | null = null;
   /** Stops reinforcements outside lockdown after this many waves. */
   maxWaves = 2;
   private waves = 0;
@@ -81,13 +99,41 @@ export class GuardManager {
 
   /** Projectile hit volumes of the guards still standing (bodies can be shot too, harmlessly). */
   hitTargets(): THREE.Object3D[] {
-    return this.guards.flatMap(g => g.hitboxes);
+    return this.guards.filter(g => !g.hidden).flatMap(g => g.hitboxes);
+  }
+
+  /** Stashes a body out of sight (wardrobe, locker): it can't be found any more. */
+  hide(g: Guard): void {
+    g.hidden = true;
+    g.discovered = true;
+    if (g.avatar) g.avatar.group.visible = false;
+  }
+
+  /** A body as it was left (restoring a checkpoint). */
+  placeBody(g: Guard, pos: { x: number; y: number; z: number }, yaw: number, hidden: boolean): void {
+    g.pos.x = pos.x; g.pos.y = pos.y; g.pos.z = pos.z;
+    g.yaw = yaw;
+    g.updateBody(0, false);
+    if (hidden) this.hide(g);
   }
 
   // ---------- Events from the world ----------
 
   /** A sound: guards in earshot react. Walls halve how far it carries. */
-  noise(at: THREE.Vector3, radius: number, kind: 'gunshot' | 'glass' | 'impact' | 'footsteps' | 'thud' | 'voice'): void {
+  noise(at: THREE.Vector3, radius: number, kind: 'gunshot' | 'glass' | 'impact' | 'footsteps' | 'thud' | 'voice' | 'distraction'): void {
+    if (kind === 'distraction') {
+      // Something thrown: the nearest guard at ease who hears it goes to look. Nobody raises the alarm.
+      const g = this.guards
+        .filter(x => x.alive && (x.state === 'patrol' || x.state === 'post') && !x.seated)
+        .map(x => ({ x, d: x.eye.distanceTo(at) }))
+        .filter(({ x, d }) => d < radius && (d < radius * 0.5 || this.game.world.clearLine(x.eye, at)))
+        .sort((a, b) => a.d - b.d)[0]?.x;
+      if (g) {
+        this.investigate(g, at, false);
+        this.bark(g, 'huh', 4);
+      }
+      return;
+    }
     for (const g of this.guards) {
       if (!g.alive) continue;
       const d = g.eye.distanceTo(at);
@@ -105,6 +151,16 @@ export class GuardManager {
     }
   }
 
+  /**
+   * A guard says something (the mission voices it). `cooldown` keeps them from repeating themselves;
+   * 0 for reactions that always get said.
+   */
+  private bark(g: Guard, kind: BarkKind, cooldown = 5): void {
+    if (!g.alive || (cooldown > 0 && g.barkCooldown > 0)) return;
+    g.barkCooldown = Math.max(g.barkCooldown, cooldown || 2.5);
+    this.onEvent({ type: 'bark', guard: g, kind, at: g.eye });
+  }
+
   /** A guard was shot. */
   damage(g: Guard, amount: number, head: boolean, from: THREE.Vector3): boolean {
     if (!g.alive) return false;
@@ -114,6 +170,7 @@ export class GuardManager {
       return true;
     }
     // Hit but standing: they know where it came from.
+    this.bark(g, 'hurt', 2);
     g.lastKnown.copy(from);
     g.awareness = 1;
     this.enterCombat(g);
@@ -149,7 +206,7 @@ export class GuardManager {
 
   /** The body within reach that has something on it, for searching (E). */
   searchable(player: THREE.Vector3): Guard | null {
-    return this.guards.find(g => !g.alive && g.carries && !g.searched &&
+    return this.guards.find(g => !g.alive && !g.hidden && g.carries && !g.searched &&
       new THREE.Vector3(g.pos.x, g.pos.y, g.pos.z).distanceTo(player) < 2.2) ?? null;
   }
 
@@ -173,21 +230,45 @@ export class GuardManager {
     }
   }
 
-  /** Lockdown: all remaining guards hunt you, reinforcements keep coming. */
+  /**
+   * Lockdown: the nearest guards (how many depends on difficulty) come for you; everyone else holds
+   * their post on full alert, so the way out is a choice. Reinforcements keep coming through the gate.
+   */
   lockdown(at: THREE.Vector3): void {
     this.raise(3, 'Lockdown');
-    for (const g of this.guards) {
-      if (!g.alive) continue;
+    const alive = this.guards.filter(g => g.alive)
+      .sort((a, b) => at.distanceTo(a.pos as THREE.Vector3) - at.distanceTo(b.pos as THREE.Vector3));
+    alive.forEach((g, i) => {
+      g.wary = 1;
       g.lastKnown.copy(at);
-      g.seated = false;
-      this.enterCombat(g);
-    }
+      if (i < this.diff.stealth.hunters) {
+        g.seated = false;
+        this.enterCombat(g);
+      } else g.awareness = Math.max(g.awareness, 0.4);
+    });
     this.reinforceTimer = 25;
   }
 
   // ---------- The frame ----------
 
+  /** Seconds since this manager started (for warnings and the like). */
+  private clock = 0;
+
+  /** A walking guard's footsteps, from where he is: you can hear someone coming round the corner. */
+  private footsteps(g: Guard, dt: number, dist: number): void {
+    if (g.speed < 0.6) { g.stride = Math.min(g.stride, 0.3); return; }
+    g.stride -= g.speed * dt;
+    if (g.stride > 0) return;
+    const running = g.speed > 3.2;
+    g.stride = running ? 1.5 : 0.75;
+    const at = new THREE.Vector3(g.pos.x, g.pos.y + 0.1, g.pos.z);
+    const ear = this.game.gfx.camera.position;
+    const muffled = dist > 3 && !this.game.world.clearLine(ear, at.clone().setY(at.y + 1));
+    this.game.audio.step(this.game.world.surfaceAt(g.pos), running ? 1 : 0.65, at, muffled);
+  }
+
   update(dt: number): void {
+    this.clock += dt;
     const g0 = this.game;
     const player = g0.player;
     const chest = new THREE.Vector3(player.pos.x, player.pos.y + Math.max(0.3, player.eyeHeight - 0.35), player.pos.z);
@@ -207,7 +288,7 @@ export class GuardManager {
       } else if (!g.alive) g.hold(dt, g0.world.colliders);
       if (g.canSee) anyoneSees = true;
       if (g.avatar) {
-        g.avatar.group.visible = dist < 90;
+        g.avatar.group.visible = dist < 90 && !g.hidden;
         g.avatar.gunCulled = dist > 30;
       }
       if ((this.tick + i) % every === 0) {
@@ -215,6 +296,7 @@ export class GuardManager {
         g.bodyDt = 0;
       }
       if (g.alive && g.speed > 0.2) g0.world.doors.npcPass(new THREE.Vector3(g.pos.x, g.pos.y, g.pos.z));
+      if (g.alive && !g.hidden && dist < 24) this.footsteps(g, dt, dist);
     }
     this.cameras(dt, chest);
     this.alarmTick(dt, anyoneSees);
@@ -233,7 +315,8 @@ export class GuardManager {
       const angle = Math.acos(THREE.MathUtils.clamp(flat.dot(g.facing), -1, 1));
       const vertical = Math.abs(Math.atan2(to.y, Math.hypot(to.x, to.z)));
       const inCone = (angle < VIEW_HALF_ANGLE && vertical < 1.0) || d < 2.2 || g.state === 'combat' && angle < 1.9;
-      if (inCone && this.game.world.clearLine(eye, chest)) {
+      const look = this.suspicion && g.state !== 'combat' ? this.suspicion(g) : null;
+      if (inCone && (!look || look.rate > 0) && this.game.world.clearLine(eye, chest)) {
         sees = true;
         const centre = 1 - (angle / VIEW_HALF_ANGLE) * 0.5;
         const stance = player.stance === 'crouch' ? 0.55 : player.stance === 'prone' ? 0.3 : 1;
@@ -244,8 +327,18 @@ export class GuardManager {
         const near = 2.2 / (0.3 + (d / 6) ** 2);
         // At night you're harder to make out away from the lights (your weapon light gives you away).
         const dark = this.game.gfx.night > 0.5 && !this.game.weapons.lightOn ? 0.7 : 1;
-        const rate = near * centre * stance * moving * state * seated * dark * (1 + g.wary * 0.6) * this.diff.aim;
-        g.awareness = Math.min(1, g.awareness + rate * dt);
+        const rate = near * centre * stance * moving * state * seated * dark * (1 + g.wary * 0.6) * this.diff.stealth.perception * (look?.rate ?? 1);
+        let cap = look?.cap ?? 1;
+        if (look?.trespass) {
+          // Somewhere you shouldn't be: first a warning, and a moment to leave.
+          const now = this.clock;
+          if (g.awareness > 0.5 && now - g.warnedAt > WARN_GRACE + 20) {
+            g.warnedAt = now;
+            this.bark(g, 'warn', 0);
+          }
+          if (now - g.warnedAt < WARN_GRACE) cap = Math.min(cap, 0.55);
+        }
+        g.awareness = g.awareness > cap ? Math.max(cap, g.awareness - dt * 0.3) : Math.min(cap, g.awareness + rate * dt);
       }
     }
     g.canSee = sees && g.awareness >= 1;
@@ -258,19 +351,19 @@ export class GuardManager {
     if (g.awareness >= 1 && g.state !== 'combat') {
       this.enterCombat(g);
       this.onEvent({ type: 'spotted', guard: g });
-      this.game.audio.bark('spotted', eye);
+      this.bark(g, 'spotted', 0);
       this.raise(2, `${g.name ?? 'A guard'} spotted you`);
     } else if (sees && g.awareness > 0.45 && (g.state === 'patrol' || g.state === 'post')) {
       // A glimpse: go and look.
       this.investigate(g, g.lastKnown, false);
-      this.game.audio.bark('huh', eye);
+      this.bark(g, 'huh', 0);
       this.raise(1, 'A guard saw something');
     }
 
     // Bodies.
     if (g.state !== 'combat') {
       for (const b of this.guards) {
-        if (b.alive || b.discovered || b === g) continue;
+        if (b.alive || b.discovered || b.hidden || b === g) continue;
         const at = new THREE.Vector3(b.pos.x, b.pos.y + 0.3, b.pos.z);
         const bt = at.clone().sub(eye);
         const bd = bt.length();
@@ -279,7 +372,7 @@ export class GuardManager {
         if (ang > VIEW_HALF_ANGLE * 1.1 || !this.game.world.clearLine(eye, at)) continue;
         b.discovered = true;
         this.onEvent({ type: 'bodyFound', guard: g, body: b });
-        this.game.audio.bark('body', eye);
+        this.bark(g, 'body', 0);
         this.investigate(g, at, true);
         g.wary = 1;
         this.raise(2, 'A body was found');
@@ -300,7 +393,7 @@ export class GuardManager {
 
   private enterCombat(g: Guard): void {
     if (g.state !== 'combat') {
-      g.reaction = (0.55 + Math.random() * 0.45) / this.diff.aim;
+      g.reaction = (0.55 + Math.random() * 0.45) * this.diff.stealth.reaction;
       g.burstLeft = 0;
     }
     g.state = 'combat';
@@ -363,6 +456,7 @@ export class GuardManager {
           // Got there: look around nearby for a while.
           g.state = 'search';
           g.goal = null;
+          if (urgent || Math.random() < 0.5) this.bark(g, 'search');
         }
         break;
       }
@@ -391,6 +485,7 @@ export class GuardManager {
   }
 
   private returnToDuty(g: Guard): void {
+    if (g.state === 'search') this.bark(g, 'lost', 0);
     g.state = g.def.route?.length ? 'patrol' : 'post';
     g.goal = null;
     g.awareness = Math.min(g.awareness, 0.3);
@@ -408,7 +503,9 @@ export class GuardManager {
     for (const o of this.others) {
       if (!o.alive) continue;
       const oc = o.position.add(new THREE.Vector3(0, 1.2, 0));
-      if (oc.distanceTo(eye) < chest.distanceTo(eye) * 0.8 && world.clearLine(eye, oc)) { target = oc; other = o; }
+      // You're the threat: they go for him when they can't see you, or he's much the nearer.
+      const nearer = oc.distanceTo(eye) < chest.distanceTo(eye) * (g.canSee ? 0.5 : 1.2);
+      if (nearer && world.clearLine(eye, oc)) { target = oc; other = o; }
     }
     const d = target.distanceTo(eye);
     const seeing = other ? true : g.canSee;
@@ -431,6 +528,7 @@ export class GuardManager {
       // Keep facing the target while moving.
       g.turnTo(Math.atan2(-(target.x - g.pos.x), -(target.z - g.pos.z)), dt, 12);
       this.shoot(g, dt, target, other, d);
+      if (g.barkCooldown <= 0 && Math.random() < dt * 0.4) this.bark(g, 'combat', 7 + Math.random() * 6);
     } else {
       // Lost sight: go to where they last saw you, then search.
       g.reaction = Math.max(g.reaction, 0.35);
@@ -439,6 +537,7 @@ export class GuardManager {
         g.state = 'search';
         g.searchTime = 25;
         g.goal = null;
+        this.bark(g, 'search');
         return;
       }
       if (!g.goal || g.repath <= 0) g.setGoal(g.lastKnown, world.nav);
@@ -446,6 +545,7 @@ export class GuardManager {
         g.state = 'search';
         g.searchTime = 25;
         g.goal = null;
+        this.bark(g, 'search');
       }
     }
   }
@@ -465,17 +565,17 @@ export class GuardManager {
     const player = this.game.player;
     // Hit chance: distance, your stance and movement, their gun and difficulty.
     const range = THREE.MathUtils.clamp(1 - (d - 4) / gun.range, 0.12, 1);
-    const moving = other ? 1 : player.horizontalSpeed > 6.5 ? 0.55 : player.horizontalSpeed > 1 ? 0.8 : 1;
+    const moving = other ? other.exposure ?? 1 : player.horizontalSpeed > 6.5 ? 0.55 : player.horizontalSpeed > 1 ? 0.8 : 1;
     const small = other ? 1 : player.stance === 'crouch' ? 0.85 : player.stance === 'prone' ? 0.6 : 1;
-    const chance = THREE.MathUtils.clamp(0.62 * range * moving * small * this.diff.aim / gun.spread, 0.04, 0.9);
+    const chance = THREE.MathUtils.clamp(0.62 * range * moving * small * this.diff.stealth.accuracy / gun.spread, 0.04, 0.9);
     const hit = Math.random() < chance && this.game.world.clearLine(muzzle, target);
     const sound = WEAPONS[g.weapon].sound;
     this.game.audio.shotAt(sound, muzzle, g.weapon === 'pistol' ? 0.8 : 1);
     this.onEvent({ type: 'shot', guard: g, at: muzzle });
     if (hit) {
       this.game.fx.tracer(muzzle, target.clone().add(new THREE.Vector3(0, -0.1, 0)), 0xffd28a);
-      const dmg = gun.damage * this.diff.damage * (0.85 + Math.random() * 0.3);
-      if (other) other.hurt(dmg);
+      const dmg = gun.damage * this.diff.stealth.damage * (0.85 + Math.random() * 0.3);
+      if (other) other.hurt(dmg * OTHER_DAMAGE);
       else this.game.hurtPlayer(dmg, g.pos);
     } else {
       // A miss: the round goes past you and hits whatever's behind.
@@ -511,7 +611,7 @@ export class GuardManager {
         const ground = this.game.world.nav.nearest({ x: at.x, y: at.y - 3, z: at.z }, 4);
         this.investigate(g, ground >= 0 ? new THREE.Vector3().copy(this.game.world.nav.point(ground) as THREE.Vector3) : at, false);
       }
-      this.game.audio.bark('camera', watcher.eye);
+      this.bark(watcher, 'deadfeed', 0);
       this.onEvent({ type: 'camera', at });
       this.raise(1, 'A camera went dark');
     }
@@ -528,13 +628,13 @@ export class GuardManager {
       }
       const stance = this.game.player.stance === 'stand' ? 1 : this.game.player.stance === 'crouch' ? 0.6 : 0.35;
       let m = this.cameraMeter.get(i) ?? 0;
-      m = sees ? m + dt * (0.95 / (0.6 + d * 0.09)) * stance * this.diff.aim : Math.max(0, m - dt * 0.25);
+      const care = this.cameraSuspicion ? this.cameraSuspicion() : 1;
+      m = sees && care > 0 ? m + dt * (0.95 / (0.6 + d * 0.09)) * stance * this.diff.stealth.perception * care : Math.max(0, m - dt * 0.25);
       this.cameraMeter.set(i, Math.min(1, m));
       if (m >= 1) {
         this.cameraMeter.set(i, 0);
         const at = new THREE.Vector3(this.game.player.pos.x, this.game.player.pos.y, this.game.player.pos.z);
         this.onEvent({ type: 'camera', at });
-        this.game.audio.bark('camera', pos);
         // Security sends the two nearest guards to have a look; a second sighting is an alert.
         const near = this.guards.filter(g => g.alive && g.state !== 'combat')
           .sort((a, b) => at.distanceTo(a.pos as THREE.Vector3) - at.distanceTo(b.pos as THREE.Vector3)).slice(0, 2);
@@ -575,10 +675,10 @@ export class GuardManager {
     if (!lockdown && this.waves >= this.maxWaves) return;
     this.reinforceTimer -= dt;
     if (this.reinforceTimer > 0) return;
-    this.reinforceTimer = lockdown ? 45 : REINFORCE_INTERVAL;
+    this.reinforceTimer = lockdown ? this.diff.stealth.waveInterval : REINFORCE_INTERVAL;
     this.waves++;
     const entry = this.entries[this.waves % Math.max(1, this.entries.length)] ?? new THREE.Vector3(0, 4.2, 52);
-    const count = lockdown ? 4 : 3;
+    const count = lockdown ? this.diff.stealth.waveSize : 3;
     const weapons: WeaponId[] = ['rifle', 'rifle', 'smg', 'shotgun'];
     for (let i = 0; i < count; i++) {
       const def: GuardDef = {
@@ -609,7 +709,7 @@ export class GuardManager {
   /** Bodies a non-guard (a guest) could see from `eye` within `range`. */
   visibleBody(eye: THREE.Vector3, range: number): Guard | null {
     for (const b of this.guards) {
-      if (b.alive) continue;
+      if (b.alive || b.hidden) continue;
       const at = new THREE.Vector3(b.pos.x, b.pos.y + 0.3, b.pos.z);
       if (at.distanceTo(eye) < range && this.game.world.clearLine(eye, at)) return b;
     }

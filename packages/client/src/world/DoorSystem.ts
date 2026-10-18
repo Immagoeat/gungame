@@ -44,13 +44,15 @@ export class DoorSystem {
     for (const p of props) {
       if (p.kind !== 'door') continue;
       const locked = !!p.lock;
+      // A keycard lock has a steel door and readers; a plain lock can be picked.
+      const keycard = locked && p.lock !== 'pick';
       const pivot = new THREE.Group();
       // Hinge at one end of the opening; the leaf extends along the door's axis.
       const along = p.axis === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
       pivot.position.set(p.x, p.y, p.z).addScaledVector(along, -p.width / 2);
       const geo = p.axis === 'x' ? new THREE.BoxGeometry(p.width - 0.02, p.height, THICK) : new THREE.BoxGeometry(THICK, p.height, p.width - 0.02);
       geo.translate(p.axis === 'x' ? p.width / 2 : 0, p.height / 2, p.axis === 'x' ? 0 : p.width / 2);
-      const leaf = new THREE.Mesh(geo, locked ? steel : wood);
+      const leaf = new THREE.Mesh(geo, keycard ? steel : wood);
       leaf.castShadow = leaf.receiveShadow = true;
       pivot.add(leaf);
       // Handle near the free edge, both sides.
@@ -61,7 +63,7 @@ export class DoorSystem {
         pivot.add(h);
       }
       let led: THREE.MeshStandardMaterial | null = null;
-      if (locked) {
+      if (keycard) {
         // Keycard reader on the wall beside the free edge, both sides.
         led = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2020, emissiveIntensity: 2 });
         this.mats.push(led);
@@ -89,11 +91,18 @@ export class DoorSystem {
     }
   }
 
+  /** Is someone standing where this closed door would be? (A door won't shut on them: it swings back open.) */
+  inTheWay: (box: AABB) => boolean = () => false;
+
   update(dt: number): void {
     for (const d of this.doors) {
       if (d.autoClose > 0) {
         d.autoClose -= dt;
         if (d.autoClose <= 0) d.target = 0;
+      }
+      if (d.target === 0 && d.open < 0.45 && !d.colliderIn && this.inTheWay(d.collider)) {
+        d.target = 1;
+        d.autoClose = 1.5;
       }
       if (d.open === d.target) continue;
       const speed = 1.6;
@@ -119,10 +128,10 @@ export class DoorSystem {
     return best;
   }
 
-  /** Player uses a door. Returns what happened. */
+  /** Player uses a door. Returns what happened. A picked lock has to be picked first (see pick). */
   use(d: Door, items: ReadonlySet<string>): 'opened' | 'closed' | 'locked' | 'unlocked' {
     if (d.locked) {
-      if (!d.prop.lock || !items.has(d.prop.lock)) return 'locked';
+      if (!d.prop.lock || d.prop.lock === 'pick' || !items.has(d.prop.lock)) return 'locked';
       d.locked = false;
       d.led?.emissive.setHex(0x20ff40);
       d.target = 1;
@@ -131,6 +140,13 @@ export class DoorSystem {
     d.target = d.target > 0.5 ? 0 : 1;
     d.autoClose = 0;
     return d.target ? 'opened' : 'closed';
+  }
+
+  /** A picked lock: unlocked, and the door eased open. */
+  pick(d: Door): void {
+    d.locked = false;
+    d.target = 1;
+    d.autoClose = 0;
   }
 
   /** Guards (who carry keys) open doors in their way and let them close behind them. */
@@ -160,7 +176,8 @@ export class DoorSystem {
     d.colliderIn = solid;
     if (solid) {
       this.colliders.push(d.collider);
-      this.info.set(d.collider, { material: d.locked ? 'steel' : 'darkWood', resistance: d.locked ? 120 : 12, invisible: true });
+      const steel = d.locked && d.prop.lock !== 'pick';
+      this.info.set(d.collider, { material: steel ? 'steel' : 'darkWood', resistance: steel ? 120 : 12, invisible: true });
     } else {
       const i = this.colliders.indexOf(d.collider);
       if (i >= 0) this.colliders.splice(i, 1);

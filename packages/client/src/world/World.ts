@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { ambience } from './beams';
 import { PartySystem } from './PartySystem';
+import { ClueSystem } from './ClueSystem';
+import { Neighborhood } from './Neighborhood';
+import { Seascape } from './Seascape';
+import { Harbour } from './Harbour';
 import { PickupSystem } from './PickupSystem';
 import { DoorSystem } from './DoorSystem';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -8,6 +12,7 @@ import {
   blockToAABB, footprintBlocked, NavGrid, isSeeThrough, isSolid, mapWater, PENETRATION_RESISTANCE, zoneAt,
   type AABB, type Block, type BlockMaterial, type MapDef, type PropDef, type Vec3, type ZoneDef,
 } from '@gungame/shared';
+import type { Surface } from '../core/Audio';
 import { batchFurniture, type FurnitureBatch } from './furniture';
 import { scrollingTextures } from './furniture/palette';
 import { GlassSystem, type GlassPane } from './GlassSystem';
@@ -24,6 +29,19 @@ export interface ColliderInfo {
 }
 
 /** Builds a MapDef into meshes and answers spatial queries (collision, line of sight, spawns, zones). */
+/** Plan cell size (m) of the sight-line grid. */
+const SIGHT_CELL = 4;
+
+
+/** Which footstep each floor material makes (anything not listed sounds like stone). */
+const SURFACE: Partial<Record<BlockMaterial, Surface>> = {
+  wood: 'wood', darkWood: 'wood', teak: 'wood', paneling: 'wood', crate: 'wood', crateLight: 'wood', crateGreen: 'wood', court: 'wood',
+  carpet: 'carpet', casinoCarpet: 'carpet', fabric: 'carpet', leather: 'carpet', rubber: 'carpet',
+  tile: 'tile', poolTile: 'tile', marble: 'tile', travertine: 'tile', helipad: 'tile',
+  metal: 'metal', steel: 'metal', deckPaint: 'metal', hull: 'metal', brass: 'metal', ironGate: 'metal', windowFrame: 'metal', serverRack: 'metal', carPaint: 'metal',
+  grass: 'grass', hedge: 'grass',
+};
+
 export class World {
   readonly root = new THREE.Group();
   readonly colliders: AABB[] = [];
@@ -40,6 +58,11 @@ export class World {
   readonly lights: LightSystem;
   readonly party: PartySystem;
   readonly pickups: PickupSystem;
+  readonly clues: ClueSystem;
+  /** Scenery beyond the playable area, if the map has any. */
+  private readonly neighborhood: Neighborhood | null;
+  private readonly seascape: Seascape | null;
+  private readonly harbour: Harbour | null;
   readonly doors: DoorSystem;
   private navGrid: NavGrid | null = null;
   private readonly furniture: FurnitureBatch;
@@ -71,6 +94,10 @@ export class World {
     this.lights = new LightSystem(this.root, map.props);
     this.party = new PartySystem(this.root, map.props, this.colliders, this.colliderInfo);
     this.pickups = new PickupSystem(this.root, map.props);
+    this.clues = new ClueSystem(this.root, map.props);
+    this.neighborhood = map.backdrop === 'beverlyHills' ? new Neighborhood(this.root) : null;
+    this.seascape = map.backdrop === 'openSea' ? new Seascape(this.root) : null;
+    this.harbour = map.backdrop === 'harbour' ? new Harbour(this.root) : null;
     this.doors = new DoorSystem(this.root, map.props, this.colliders, this.colliderInfo, this.occluders);
     scene.add(this.root);
   }
@@ -80,9 +107,13 @@ export class World {
     this.time += dt;
     ambience.night = night;
     this.security.update(dt);
-    this.lights.update(dt, night);
+    this.lights.update(dt, night, camera);
     this.party.update(dt, this.time, camera);
     this.pickups.update(this.time);
+    this.clues.update(this.time);
+    this.neighborhood?.update(night);
+    this.seascape?.update(dt, night);
+    this.harbour?.update(dt, night);
     this.doors.update(dt);
     for (const d of this.furniture.dynamics) d.update(dt, this.time);
     for (const s of scrollingTextures) {
@@ -113,26 +144,87 @@ export class World {
     const len = Math.hypot(dx, dy, dz);
     if (len < 1e-4) return true;
     const ix = len / (dx || 1e-12), iy = len / (dy || 1e-12), iz = len / (dz || 1e-12);
-    for (const b of this.colliders) {
-      // Slab test on the segment (0..len).
-      let t0 = 0, t1 = len;
-      let a = (b.min.x - from.x) * ix, c = (b.max.x - from.x) * ix;
-      if (a > c) [a, c] = [c, a];
-      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
-      if (t0 > t1) continue;
-      a = (b.min.y - from.y) * iy; c = (b.max.y - from.y) * iy;
-      if (a > c) [a, c] = [c, a];
-      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
-      if (t0 > t1) continue;
-      a = (b.min.z - from.z) * iz; c = (b.max.z - from.z) * iz;
-      if (a > c) [a, c] = [c, a];
-      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
-      if (t0 > t1) continue;
-      const info = this.colliderInfo.get(b);
-      if (info?.material === 'glass' || this.party.isGuestBox(b)) continue;
-      return false;
+    const grid = this.sightGrid();
+    const stamp = ++grid.stamp;
+    // Walk the grid cells the segment crosses (in plan), testing each box once.
+    const C = SIGHT_CELL;
+    let cx = Math.floor((from.x - grid.minX) / C), cz = Math.floor((from.z - grid.minZ) / C);
+    const ex = Math.floor((to.x - grid.minX) / C), ez = Math.floor((to.z - grid.minZ) / C);
+    const sx = Math.sign(dx), sz = Math.sign(dz);
+    const flat = Math.hypot(dx, dz);
+    const tdx = dx ? Math.abs(C / dx) : Infinity, tdz = dz ? Math.abs(C / dz) : Infinity;
+    let tx = dx ? ((sx > 0 ? (cx + 1) * C + grid.minX - from.x : from.x - (cx * C + grid.minX)) / Math.abs(dx)) : Infinity;
+    let tz = dz ? ((sz > 0 ? (cz + 1) * C + grid.minZ - from.z : from.z - (cz * C + grid.minZ)) / Math.abs(dz)) : Infinity;
+    for (let steps = 0; steps < 4096; steps++) {
+      if (cx >= 0 && cz >= 0 && cx < grid.w && cz < grid.h) {
+        for (const b of grid.cells[cz * grid.w + cx]) {
+          if (grid.seen.get(b) === stamp) continue;
+          grid.seen.set(b, stamp);
+          // Slab test on the segment (0..len).
+          let t0 = 0, t1 = len;
+          let a = (b.min.x - from.x) * ix, c = (b.max.x - from.x) * ix;
+          if (a > c) [a, c] = [c, a];
+          t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+          if (t0 > t1) continue;
+          a = (b.min.y - from.y) * iy; c = (b.max.y - from.y) * iy;
+          if (a > c) [a, c] = [c, a];
+          t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+          if (t0 > t1) continue;
+          a = (b.min.z - from.z) * iz; c = (b.max.z - from.z) * iz;
+          if (a > c) [a, c] = [c, a];
+          t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+          if (t0 > t1) continue;
+          const info = this.colliderInfo.get(b);
+          if (info?.material === 'glass' || info?.material === 'barrier' || this.party.isGuestBox(b)) continue;
+          return false;
+        }
+      }
+      // Done once past the far end (tx/tz are where along the segment, 0..1, the next cell starts).
+      if ((cx === ex && cz === ez) || flat < 1e-6 || Math.min(tx, tz) > 1) break;
+      if (tx < tz) { tx += tdx; cx += sx; } else { tz += tdz; cz += sz; }
     }
     return true;
+  }
+
+  /**
+   * Colliders bucketed by plan position for sight lines. Rebuilt when boxes come or go (doors, glass,
+   * guests): a millisecond or two, and rare.
+   */
+  private sightGrid() {
+    const g = this.sight;
+    if (g && g.count === this.colliders.length) return g;
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (const b of this.colliders) {
+      minX = Math.min(minX, b.min.x); minZ = Math.min(minZ, b.min.z);
+      maxX = Math.max(maxX, b.max.x); maxZ = Math.max(maxZ, b.max.z);
+    }
+    const C = SIGHT_CELL;
+    const w = Math.max(1, Math.ceil((maxX - minX) / C) + 1), h = Math.max(1, Math.ceil((maxZ - minZ) / C) + 1);
+    const cells: AABB[][] = Array.from({ length: w * h }, () => []);
+    for (const b of this.colliders) {
+      const x0 = Math.floor((b.min.x - minX) / C), x1 = Math.floor((b.max.x - minX) / C);
+      const z0 = Math.floor((b.min.z - minZ) / C), z1 = Math.floor((b.max.z - minZ) / C);
+      for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) cells[z * w + x].push(b);
+    }
+    this.sight = { count: this.colliders.length, minX, minZ, w, h, cells, stamp: 0, seen: g?.seen ?? new WeakMap() };
+    return this.sight;
+  }
+  private sight: { count: number; minX: number; minZ: number; w: number; h: number; cells: AABB[][]; stamp: number; seen: WeakMap<AABB, number> } | null = null;
+
+  /** What's underfoot at a point (the top of the floor it's standing on), for footsteps. */
+  surfaceAt(p: Vec3): Surface {
+    const g = this.sightGrid();
+    const cx = Math.floor((p.x - g.minX) / SIGHT_CELL), cz = Math.floor((p.z - g.minZ) / SIGHT_CELL);
+    let best: AABB | null = null;
+    if (cx >= 0 && cz >= 0 && cx < g.w && cz < g.h) {
+      for (const b of g.cells[cz * g.w + cx]) {
+        if (p.x < b.min.x || p.x > b.max.x || p.z < b.min.z || p.z > b.max.z) continue;
+        if (b.max.y > p.y + 0.08 || b.max.y < p.y - 0.12) continue;
+        if (!best || b.max.y > best.max.y) best = b;
+      }
+    }
+    const material = best ? this.colliderInfo.get(best)?.material : p.y < 0.1 ? this.map.groundMaterial : undefined;
+    return material ? SURFACE[material] ?? 'stone' : 'stone';
   }
 
   hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
@@ -179,12 +271,17 @@ export class World {
     this.lights.dispose();
     this.party.dispose();
     this.pickups.dispose();
+    this.clues.dispose();
+    this.neighborhood?.dispose();
+    this.seascape?.dispose();
+    this.harbour?.dispose();
     this.doors.dispose();
     this.furniture.dispose();
     for (const d of this.disposables) d.dispose();
   }
 
   private buildGround(): void {
+    if (this.map.noGround) return;
     const size = this.map.halfSize * 2;
     const geo = new THREE.PlaneGeometry(size, size);
     geo.rotateX(-Math.PI / 2);

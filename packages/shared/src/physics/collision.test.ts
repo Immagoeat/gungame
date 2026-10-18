@@ -41,6 +41,57 @@ describe('moveAndCollide', () => {
   });
 });
 
+describe('moveAndCollide never pops or shoves you somewhere else', () => {
+  it("doesn't step up a ledge when there's no room above it (it can't pop you up through the ceiling)", () => {
+    const b = body();
+    b.vel.x = 6;
+    const ledge = box(1, 0, -5, 5, 0.4, 5);
+    const ceiling = box(0.5, 2, -5, 5, 2.3, 5); // 1.6 m clear above the ledge: no room to stand
+    for (let i = 0; i < 60; i++) { b.vel.y -= 25 / 60; moveAndCollide(b, [ledge, ceiling], 1 / 60); }
+    expect(b.pos.y).toBeLessThan(0.01);
+    expect(b.pos.x).toBeLessThan(1);
+  });
+
+  it('a head caught in a ceiling is pushed down, not up onto the floor above', () => {
+    const b = body(0, 0.1, 0);
+    const ceiling = box(-5, 1.7, -5, 5, 2, 5);
+    for (let i = 0; i < 30; i++) { b.vel.y -= 25 / 60; moveAndCollide(b, [ceiling], 1 / 60); }
+    expect(b.pos.y).toBeLessThan(0.01);
+  });
+
+  it("isn't carried through a wall it's a hair inside", () => {
+    const wall = box(1, 0, -5, 1.15, 3, 5);
+    const b = body(1 - 0.4 + 0.01, 0, 0); // 1 cm into the wall
+    b.vel.x = 6;
+    for (let i = 0; i < 60; i++) moveAndCollide(b, [wall], 1 / 60);
+    expect(b.pos.x).toBeLessThan(1);
+  });
+
+  it("isn't shoved to the far end of a long thin box it's standing in", () => {
+    const rug = box(-20, 0, -1, 20, 0.03, 1);
+    const b = body(0, 0, 0); // feet just below the top of a rug
+    b.vel.x = 3;
+    moveAndCollide(b, [rug], 1 / 60);
+    expect(Math.abs(b.pos.x)).toBeLessThan(0.1);
+    expect(b.pos.y).toBeCloseTo(0.03);
+  });
+
+  it('climbs a steep flight at a choppy frame rate, a tread at a time', () => {
+    const steps = Array.from({ length: 12 }, (_, i) => box(1 + i * 0.35, 0, -1, 1 + (i + 1) * 0.35, (i + 1) * 0.29, 1));
+    steps.push(box(5.2, 0, -1, 30, 12 * 0.29, 1)); // the landing
+    const b = body();
+    for (let t = 0; t < 1.5; t += 0.05) stepMovement(b, { buttons: Buttons.Forward | Buttons.Sprint, yaw: -Math.PI / 2 }, 0.05, steps);
+    expect(b.pos.y).toBeCloseTo(12 * 0.29);
+  });
+
+  it('falls for ever where the map has no ground', () => {
+    const b = body(0, 1, 0);
+    b.floor = -Infinity;
+    for (let i = 0; i < 60; i++) { b.vel.y -= 25 / 60; moveAndCollide(b, [], 1 / 60); }
+    expect(b.pos.y).toBeLessThan(-3);
+  });
+});
+
 describe('stances', () => {
   it('crouching and crawling lower the body and slow you down', () => {
     const stand = run(body(), Buttons.Forward, 1);

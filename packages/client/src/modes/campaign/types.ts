@@ -1,4 +1,5 @@
 import type { MapId, Vec3, WeaponId } from '@gungame/shared';
+import type { Cutscene } from '../../cutscenes/Cutscene';
 
 /** What the player must do to complete a mission. Missions can chain several. */
 export type ObjectiveDef =
@@ -28,4 +29,23 @@ export interface MissionDef {
   intro?: string;
   objectives: ObjectiveDef[];
   story: StoryBeat[];
+}
+
+/** A mission's gameplay (objectives, characters, rules), run by CampaignMode. */
+export interface CampaignScript {
+  /** Restarting from a checkpoint: no intro. */
+  readonly skipIntro: boolean;
+  /** The closing scene, if the mode can make one (set by CampaignMode before start). */
+  outro: (() => Cutscene | null) | null;
+  start(): void;
+  introDone(): void;
+  /** While a cutscene plays: animate characters (not their AI). */
+  scenery(dt: number): void;
+  update(dt: number): void;
+  interact(): boolean;
+  prompt(): string | null;
+  key(code: string): boolean;
+  pauseDetails(): string;
+  fail(reason: string): void;
+  dispose(): void;
 }

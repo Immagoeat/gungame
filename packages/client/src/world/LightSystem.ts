@@ -5,7 +5,13 @@ type LightProp = Extract<PropDef, { kind: 'light' }>;
 
 /** A light you can see and shoot: the light itself plus the glowing parts of its fixture. */
 export interface LightFixture {
+  /**
+   * The light as authored. Unless it casts shadows it isn't in the scene itself: the nearest
+   * fixtures borrow the real lights of a fixed pool each frame (see LightSystem.update).
+   */
   light: THREE.PointLight;
+  /** In the scene for good (shadow casters), rather than drawn through the pool. */
+  standalone: boolean;
   baseIntensity: number;
   nightOnly: boolean;
   /** Emissive materials that glow while the light is on. */
@@ -24,6 +30,14 @@ const INDOOR_SCALE = 0.5;
 /** Glow of lamp shades and bulbs (kept modest so they don't bloom into white blobs). */
 const GLOW = 1.3;
 const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
+/**
+ * How many real point lights the map's fixtures share. Every point light in the scene costs every
+ * lit pixel, so a ship or a house with seventy lamps only lights the ones nearest the camera.
+ * A fixed count also means shaders never recompile as lights come and go.
+ */
+const POOL_SIZE = 24;
+/** Lights near the edge of the pool fade over this many metres rather than popping. */
+const POOL_FADE = 4;
 const brass = new THREE.MeshStandardMaterial({ color: 0xd4a94d, metalness: 1, roughness: 0.25 });
 
 /**
@@ -34,7 +48,15 @@ export class LightSystem {
   readonly fixtures: LightFixture[] = [];
   private readonly disposables: { dispose(): void }[] = [];
 
+  private readonly pool: THREE.PointLight[] = [];
+  private readonly ranked: { f: LightFixture; score: number }[] = [];
+
   constructor(private readonly root: THREE.Group, props: readonly PropDef[]) {
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 1, 2);
+      this.pool.push(l);
+      root.add(l);
+    }
     for (const p of props) {
       if (p.kind === 'light') this.addLight(p);
       else if (p.kind === 'chandelier') this.addChandelier(p.x, p.y, p.z, p.castShadow ?? false);
@@ -57,8 +79,11 @@ export class LightSystem {
     return true;
   }
 
-  /** @param night 0 = day, 1 = full night */
-  update(dt: number, night: number): void {
+  /**
+   * @param night 0 = day, 1 = full night
+   * @param eye where the camera is: the fixtures nearest it get the pool's lights
+   */
+  update(dt: number, night: number, eye?: THREE.Vector3): void {
     for (const f of this.fixtures) {
       if (f.state === 'dying') {
         f.dyingTime -= dt;
@@ -77,6 +102,31 @@ export class LightSystem {
       f.light.intensity = f.baseIntensity * level * timeOfDay;
       for (const m of f.glow) m.emissiveIntensity = GLOW * level * (f.nightOnly ? timeOfDay : 1);
     }
+    this.assignPool(eye);
+  }
+
+  /** Hands the pool's lights to the lit fixtures that matter most from here: the nearest, allowing for reach. */
+  private assignPool(eye?: THREE.Vector3): void {
+    const ranked = this.ranked;
+    ranked.length = 0;
+    for (const f of this.fixtures) {
+      if (f.standalone || f.light.intensity <= 0) continue;
+      const score = eye ? f.light.position.distanceTo(eye) - f.light.distance * 0.5 : 0;
+      ranked.push({ f, score });
+    }
+    ranked.sort((a, b) => a.score - b.score);
+    // Everything ranked past the pool is dark; those just inside it fade by how close they are to that cut.
+    const cut = ranked.length > POOL_SIZE ? ranked[POOL_SIZE].score : Infinity;
+    for (let i = 0; i < this.pool.length; i++) {
+      const l = this.pool[i];
+      const r = ranked[i];
+      if (!r) { l.intensity = 0; continue; }
+      const src = r.f.light;
+      l.position.copy(src.position);
+      l.color.copy(src.color);
+      l.distance = src.distance;
+      l.intensity = src.intensity * Math.min(1, (cut - r.score) / POOL_FADE);
+    }
   }
 
   dispose(): void {
@@ -85,7 +135,8 @@ export class LightSystem {
 
   private register(light: THREE.PointLight, nightOnly: boolean, glow: THREE.MeshStandardMaterial[], hitboxes: THREE.Mesh[]): LightFixture {
     const f: LightFixture = {
-      light, baseIntensity: light.intensity * (nightOnly ? 1 : INDOOR_SCALE), nightOnly, glow, hitboxes,
+      light, standalone: light.castShadow,
+      baseIntensity: light.intensity * (nightOnly ? 1 : INDOOR_SCALE), nightOnly, glow, hitboxes,
       state: 'on', dyingTime: 0, flickerTimer: 0, lit: true,
     };
     for (const h of hitboxes) h.userData.lightFixture = f;
@@ -101,7 +152,7 @@ export class LightSystem {
       light.shadow.mapSize.set(512, 512);
       light.shadow.bias = -0.002;
     }
-    this.root.add(light);
+    if (p.castShadow) this.root.add(light);
     if (!p.fixture) {
       this.register(light, p.nightOnly ?? false, [], []);
       return;
@@ -162,7 +213,8 @@ export class LightSystem {
     hit.position.y = -0.4;
     hit.scale.y = 0.7;
     g.add(hit);
-    this.root.add(g, light);
+    this.root.add(g);
+    if (castShadow) this.root.add(light);
     this.disposables.push(crystal);
     this.register(light, false, [crystal], [hit]);
   }

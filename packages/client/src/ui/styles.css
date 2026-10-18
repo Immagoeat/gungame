@@ -209,14 +209,22 @@ canvas { display: block; }
 
 /* Mission HUD */
 #mission { display: none; position: absolute; inset: 0; pointer-events: none; }
-#objective { position: absolute; left: 20px; top: 20px; max-width: 360px; padding: 10px 14px; background: rgba(0,0,0,.4); border-left: 3px solid #ffd166; }
+#objCol { position: absolute; left: 20px; top: 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+#objective { max-width: 360px; padding: 10px 14px; background: rgba(0,0,0,.4); border-left: 3px solid #ffd166; }
 #objective.new { animation: objIn .6s ease; }
 @keyframes objIn { from { opacity: 0; transform: translateX(-12px); } }
 #objTitle { font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: #ffd166; }
 #objText { font-size: 16px; font-weight: 700; margin-top: 3px; }
 #objSub { font-size: 12px; opacity: .75; margin-top: 4px; }
 #objSub:empty { display: none; }
-#alarm { position: absolute; left: 20px; top: calc(20px + 98px); font-size: 11px; letter-spacing: .25em; font-weight: 800; padding: 3px 8px; border-radius: 3px; }
+#objLeads { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; }
+#objLeads:empty { display: none; }
+#objLeads li { padding: 2px 0 2px 18px; position: relative; opacity: .7; }
+#objLeads li::before { content: ''; position: absolute; left: 2px; top: 6px; width: 7px; height: 7px; border: 1px solid currentColor; }
+#objLeads li.found { opacity: 1; color: #b9f0c4; }
+#objLeads li.found::before { background: #6fdc8c; border-color: #6fdc8c; }
+#objLeads li.lost { opacity: .4; text-decoration: line-through; }
+#alarm { font-size: 11px; letter-spacing: .25em; font-weight: 800; padding: 3px 8px; border-radius: 3px; }
 #alarm.undetected { color: #cfd6dc; background: rgba(0,0,0,.35); }
 #alarm.suspicious { color: #14110a; background: #ffb020; }
 #alarm.alert { color: #fff; background: #d62828; }
@@ -233,5 +241,92 @@ canvas { display: block; }
   background: rgba(0,0,0,.45); border-radius: 4px; opacity: 0; transition: opacity .25s; }
 #radio.on { opacity: 1; }
 #radio b { color: #8fd3ff; letter-spacing: .12em; font-size: 12px; margin-right: 10px; text-transform: uppercase; }
+/* Intel card: what a clue says (a document, a screen, a phone), shown for a while after examining it. */
+#intel { position: absolute; right: 28px; top: 20%; width: 360px; padding: 16px 18px 18px; opacity: 0; transform: translateX(20px) rotate(.6deg);
+  transition: opacity .3s, transform .3s; background: #f3efe4; color: #24221d; box-shadow: 0 12px 40px rgba(0,0,0,.55); font-size: 13px; line-height: 1.5; }
+#intel.on { opacity: 1; transform: translateX(0) rotate(.6deg); }
+#intel .intel-from { font-size: 10px; letter-spacing: .28em; text-transform: uppercase; opacity: .6; }
+#intel .intel-title { font-size: 15px; font-weight: 800; margin: 4px 0 8px; }
+#intel .intel-body p { margin: 0 0 6px; }
+#intel .intel-body .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+#intel .intel-body mark { background: #ffe08a; color: inherit; padding: 0 2px; }
+#intel.k-screen { background: #e9eef5; color: #1d2836; transform: translateX(20px); }
+#intel.k-screen.on, #intel.k-phone.on { transform: none; }
+#intel.k-phone { width: 300px; background: #0f1724; color: #dfe8f5; border-radius: 18px; padding: 18px 16px; transform: translateX(20px); }
+#intel.k-phone .bubble { margin: 6px 0; padding: 7px 10px; border-radius: 12px; background: #263247; max-width: 85%; }
+#intel.k-phone .bubble.me { background: #2f6fd6; margin-left: auto; }
+#intel.k-phone .intel-body mark { background: rgba(255,224,138,.25); color: #fff2c4; }
+/* Tagged guards: a chevron over their heads, through walls; colour = how alert they are. */
+#tags { position: absolute; inset: 0; overflow: hidden; }
+#tags .tag { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#tags .tag i { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid currentColor; filter: drop-shadow(0 0 2px #000); }
+#tags .tag s { display: block; width: 18px; height: 3px; background: rgba(0,0,0,.5); text-decoration: none; }
+#tags .tag s b { display: block; height: 100%; background: currentColor; }
+#tags .tag.calm { color: #e9eef2; } #tags .tag.wary { color: #ffb020; } #tags .tag.combat { color: #ff3b30; }
+#tags .tag.far { opacity: .55; }
+#gadgets { position: absolute; left: 20px; bottom: 112px; font-size: 12px; letter-spacing: .06em; padding: 4px 10px; background: rgba(0,0,0,.4); border-radius: 3px; }
+#gadgets:empty { display: none; }
+#gadgets kbd { display: inline-block; padding: 0 4px; margin-right: 4px; border-radius: 2px; background: rgba(255,255,255,.85); color: #111; font: 800 11px inherit; }
+#gadgets span { margin-right: 12px; }
+/* Tactical map (M) */
+#tacmap { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 94vw; background: rgba(8,12,18,.94); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+#tacmap.on { display: block; }
+#tacmap { min-width: min(760px, 94vw); }
+#tacmap .tm-head { display: flex; gap: 16px; align-items: baseline; white-space: nowrap; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 12px; letter-spacing: .2em; }
+#tacmap .tm-head b { color: #ffd166; }
+#tacmap .tm-keys { margin-left: auto; opacity: .6; letter-spacing: .05em; }
+#tmCanvas { display: block; margin: 0 auto; max-width: 94vw; max-height: calc(100vh - 130px); width: auto; height: auto; }
+#tacmap .tm-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 14px 10px; font-size: 11px; opacity: .85; }
+#tacmap .tm-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+/* Pause: mission briefing, leads and intel */
+/* With a mission briefing the pause screen widens: briefing on the left, buttons on the right. */
+#scr-pause.details { max-width: 1040px; }
+#scr-pause.details h2.big { font-size: 44px; }
+#scr-pause.details .pause-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; align-items: start; }
+#pauseDetails { text-align: left; max-height: calc(100vh - 220px); overflow-y: auto; padding-right: 8px; }
+#pauseDetails:empty { display: none; }
+#pauseDetails p { margin: 4px 0; font-size: 13px; opacity: .8; }
+#pauseDetails h3 { font-size: 11px; letter-spacing: .3em; color: #ffd166; margin: 14px 0 6px; font-weight: 800; }
+#pauseDetails .pd-obj { font-size: 16px; font-weight: 700; }
+#pauseDetails ul { list-style: none; margin: 0; padding: 0; }
+#pauseDetails li { padding: 4px 0 4px 20px; position: relative; font-size: 13px; opacity: .75; }
+#pauseDetails li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border: 1px solid currentColor; }
+#pauseDetails li.done { opacity: 1; color: #b9f0c4; }
+#pauseDetails li.done::before { background: #6fdc8c; border-color: #6fdc8c; }
+#pauseDetails li.failed { opacity: .45; text-decoration: line-through; }
+#pauseDetails details { margin: 4px 0; background: rgba(255,255,255,.05); padding: 6px 10px; border-radius: 4px; }
+#pauseDetails summary { cursor: pointer; font-size: 13px; }
+#pauseDetails details .intel-body { font-size: 12.5px; line-height: 1.5; padding: 6px 0 2px; opacity: .9; }
+#pauseDetails details mark { background: rgba(255,209,102,.3); color: inherit; }
+#pauseDetails .bubble { margin: 4px 0; padding: 5px 9px; border-radius: 10px; background: #263247; max-width: 80%; }
+#pauseDetails .bubble.me { background: #2f6fd6; margin-left: auto; }
+#overExtra { max-width: 520px; margin: 0 auto 18px; text-align: left; }
+#overExtra h3 { font-size: 11px; letter-spacing: .3em; color: #ffd166; margin: 0 0 8px; }
+#overExtra li { list-style: none; padding: 4px 0 4px 22px; position: relative; font-size: 14px; opacity: .6; }
+#overExtra ul { margin: 0; padding: 0; }
+#overExtra li::before { content: '✗'; position: absolute; left: 2px; color: #ff6b6b; }
+#overExtra li.done { opacity: 1; }
+#overExtra li.done::before { content: '✓'; color: #6fdc8c; }
+#overExtra li em { font-style: normal; font-size: 10px; letter-spacing: .2em; color: #ffd166; margin-left: 8px; }
 #prompt .hold { display: inline-block; width: 60px; height: 4px; margin-left: 10px; background: rgba(255,255,255,.25); vertical-align: middle; }
 #prompt .hold span { display: block; height: 100%; background: #ffd166; }
+/* Conversation replies: numbered, over the subtitles. */
+#dialogue { position: absolute; left: 50%; bottom: 170px; transform: translateX(-50%); display: none; flex-direction: column; gap: 6px; min-width: 360px; max-width: 60vw; }
+#dialogue.on { display: flex; }
+#dialogue div { padding: 7px 14px; background: rgba(8,12,18,.78); border-left: 3px solid #8fd3ff; font-size: 15px; animation: objIn .25s ease; }
+#dialogue kbd { display: inline-block; min-width: 18px; margin-right: 10px; padding: 0 5px; border-radius: 3px; background: #8fd3ff; color: #0b1118; font: 800 12px inherit; text-align: center; }
+#prompt .listen { font-style: italic; opacity: .85; }
+
+/* Restricted area: a red pulse round the edges while you're somewhere your clothes don't belong, and a
+   taped warning card as you step in. */
+#restricted .rz-edge { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s;
+  box-shadow: inset 0 0 90px 18px rgba(214, 40, 40, .55); }
+#restricted.on .rz-edge { opacity: 1; animation: rzPulse 1.6s ease-in-out infinite; }
+@keyframes rzPulse { 0%, 100% { box-shadow: inset 0 0 70px 12px rgba(214, 40, 40, .4); } 50% { box-shadow: inset 0 0 120px 26px rgba(214, 40, 40, .7); } }
+#restricted .rz-card { position: fixed; left: 50%; top: 17%; transform: translate(-50%, -12px); opacity: 0; transition: opacity .25s, transform .25s;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 26px 9px; pointer-events: none;
+  background: rgba(20, 6, 6, .82); border: 2px solid #d62828; border-radius: 4px;
+  border-image: repeating-linear-gradient(45deg, #e2b21e 0 10px, #16181a 10px 20px) 6; }
+#restricted .rz-card b { font-size: 22px; font-weight: 900; letter-spacing: .22em; color: #ff4b3e; }
+#restricted .rz-card span { font-size: 13px; letter-spacing: .08em; color: #f2e9e6; opacity: .9; }
+#restricted.flash .rz-card { opacity: 1; transform: translate(-50%, 0); }

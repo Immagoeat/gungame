@@ -1,0 +1,701 @@
+{
+  "_about": "Every spoken line. The game shows `text` as the subtitle and plays public/audio/voice/<file>.ogg; tools/voice/generate.py renders the files from this list. Voices are LibriTTS speakers (en_US-libritts-high, CC BY 4.0). `radio` voices get a radio filter.",
+  "voices": {
+    "overwatch": {
+      "name": "Overwatch",
+      "speaker": 207,
+      "radio": true,
+      "length": 0.9
+    },
+    "viper": {
+      "name": "Viper",
+      "speaker": 414,
+      "radio": true,
+      "length": 1.0
+    },
+    "security": {
+      "name": "Security",
+      "speaker": 69,
+      "radio": true,
+      "length": 0.95
+    },
+    "reyes": {
+      "name": "Reyes",
+      "speaker": 368,
+      "radio": false,
+      "length": 0.92
+    },
+    "kessler": {
+      "name": "Kessler",
+      "speaker": 851,
+      "radio": false,
+      "length": 1.0
+    },
+    "mills": {
+      "name": "Mills",
+      "speaker": 253,
+      "radio": false,
+      "length": 1.0
+    },
+    "dario": {
+      "name": "Dario",
+      "speaker": 828,
+      "radio": false,
+      "length": 1.02
+    },
+    "guard1": {
+      "name": "Guard",
+      "speaker": 483,
+      "radio": false,
+      "length": 0.95
+    },
+    "guard2": {
+      "name": "Guard",
+      "speaker": 92,
+      "radio": false,
+      "length": 0.95
+    },
+    "guard3": {
+      "name": "Guard",
+      "speaker": 506,
+      "radio": false,
+      "length": 0.92
+    },
+    "guard4": {
+      "name": "Guard",
+      "speaker": 437,
+      "radio": false,
+      "length": 0.95
+    },
+    "guard5": {
+      "name": "Guard",
+      "speaker": 713,
+      "radio": false,
+      "length": 0.92
+    },
+    "navarro": {
+      "name": "You",
+      "speaker": 414,
+      "radio": false,
+      "length": 1.0
+    },
+    "felix": {
+      "name": "Felix",
+      "speaker": 802,
+      "radio": false,
+      "length": 1.0
+    },
+    "castell": {
+      "name": "Castell",
+      "speaker": 462,
+      "radio": false,
+      "length": 1.05
+    },
+    "vale": {
+      "name": "Vale",
+      "speaker": 700,
+      "radio": false,
+      "length": 1.08
+    },
+    "nadia": {
+      "name": "Nadia",
+      "speaker": 280,
+      "radio": false,
+      "length": 0.98
+    }
+  },
+  "lines": {
+    "arrival-0": {
+      "voice": "overwatch",
+      "text": "Viper, Overwatch. Radio check."
+    },
+    "arrival-1": {
+      "voice": "viper",
+      "text": "Loud and clear."
+    },
+    "arrival-2": {
+      "voice": "overwatch",
+      "text": "Party's in full swing. Two hundred guests, security on every door."
+    },
+    "arrival-3": {
+      "voice": "overwatch",
+      "text": "Gate's open for the vendors. Nobody looks twice at a van."
+    },
+    "arrival-4": {
+      "voice": "viper",
+      "text": "Copy. Rolling in."
+    },
+    "arrival-5": {
+      "voice": "overwatch",
+      "text": "Cameras are live on every floor. Stay out of sight."
+    },
+    "arrival-6": {
+      "voice": "overwatch",
+      "text": "Good luck, Viper."
+    },
+    "intro": {
+      "voice": "overwatch",
+      "text": "I've got the gate cameras on a loop; every other camera is live. Stay low, guards on the front door. Two ways in: the side door by the garage, or round the west lawn to the library's garden door. It's locked, but you can pick it."
+    },
+    "intro-kit": {
+      "voice": "overwatch",
+      "text": "Tag any guard you can see and I'll keep track of him for you. And you've got a few coins, if you need someone looking the other way."
+    },
+    "inside": {
+      "voice": "overwatch",
+      "text": "You're in. Nobody's seen Reyes since they brought him in; we need to know where they're keeping him. Castell's people are sloppy. Find three solid leads."
+    },
+    "deduce": {
+      "voice": "overwatch",
+      "text": "That's enough. He's in the penthouse study, top floor, and both doors take Kessler's keycard. Kessler walks the second floor with a partner. Get that card."
+    },
+    "keycard": {
+      "voice": "overwatch",
+      "text": "Got the card. Third floor, penthouse study. Quietly."
+    },
+    "looped": {
+      "voice": "overwatch",
+      "text": "Feeds are looped. The cameras are blind."
+    },
+    "lead-feeds": {
+      "voice": "overwatch",
+      "text": "Kessler shut off the camera in the penthouse study a few minutes after the cellar was cleared. They moved him upstairs. You can loop the other feeds from this terminal too."
+    },
+    "lead-cellar": {
+      "voice": "overwatch",
+      "text": "He was held down here, and they moved him recently. Wherever he is now, it's somewhere they can lock."
+    },
+    "lead-office": {
+      "voice": "overwatch",
+      "text": "Castell's own words: the study, and Kessler controls the door. That's solid."
+    },
+    "lead-kitchen": {
+      "voice": "overwatch",
+      "text": "Dinner for one, top floor, plastic cutlery, and Kessler opens the door. That's our man."
+    },
+    "lead-phone": {
+      "voice": "overwatch",
+      "text": "Kessler, texting the boss: upstairs, and the only card stays on him."
+    },
+    "lead-smokers": {
+      "voice": "overwatch",
+      "text": "You heard them. Penthouse study, and Kessler's card is the way in."
+    },
+    "smokers-lost": {
+      "voice": "overwatch",
+      "text": "Well, they won't be talking now."
+    },
+    "alert-gunshots": {
+      "voice": "overwatch",
+      "text": "They heard the shots. They're on alert."
+    },
+    "alert-spotted": {
+      "voice": "overwatch",
+      "text": "You've been spotted. They're on alert."
+    },
+    "alert-body": {
+      "voice": "overwatch",
+      "text": "They found a body. They're on alert."
+    },
+    "alert-camera": {
+      "voice": "overwatch",
+      "text": "A camera saw you. They're on alert."
+    },
+    "alert-other": {
+      "voice": "overwatch",
+      "text": "Something spooked them. They're on alert."
+    },
+    "lost-you": {
+      "voice": "overwatch",
+      "text": "They lost you. Stay low."
+    },
+    "reinforcements": {
+      "voice": "overwatch",
+      "text": "More security coming in. Watch the gate."
+    },
+    "camera-chatter": {
+      "voice": "security",
+      "text": "Camera picked something up. Check it out."
+    },
+    "viper-got-him": {
+      "voice": "viper",
+      "text": "Overwatch, I have him. Coming out."
+    },
+    "lockdown": {
+      "voice": "overwatch",
+      "text": "The whole house is locking down. Get him to the van, now!"
+    },
+    "ledger": {
+      "voice": "overwatch",
+      "text": "Castell's ledger. That's enough to put him away for good. Bring it home."
+    },
+    "win": {
+      "voice": "overwatch",
+      "text": "Reyes is safe. Good work, Viper. Let's go home."
+    },
+    "c2-arrival-0": {
+      "voice": "overwatch",
+      "text": "That's the Aurelia. By morning she's in international waters, with every one of the Meridian's people aboard."
+    },
+    "c2-arrival-1": {
+      "voice": "viper",
+      "text": "And Castell?"
+    },
+    "c2-arrival-2": {
+      "voice": "overwatch",
+      "text": "Deck six, under Vale's protection. Find your contact first. Then we talk about Vale."
+    },
+    "c2-intro": {
+      "voice": "overwatch",
+      "text": "You're aboard, Navarro. Kessler's invitation got you through the door; now act like you belong. No gun, no hurry. Your contact will find you in the casino, deck four."
+    },
+    "c2-casino": {
+      "voice": "overwatch",
+      "text": "Good. Get yourself a drink and wait. He knows your face from the file; let him come to you."
+    },
+    "felix-0": {
+      "voice": "felix",
+      "text": "Mr. Navarro. Kessler said you'd be taller."
+    },
+    "nav-f0a": {
+      "voice": "navarro",
+      "text": "Kessler said a lot of things."
+    },
+    "felix-0a": {
+      "voice": "felix",
+      "text": "He did. Now he isn't saying anything, and the Meridian want to know why."
+    },
+    "nav-f0b": {
+      "voice": "navarro",
+      "text": "You're Felix."
+    },
+    "felix-0b": {
+      "voice": "felix",
+      "text": "Keep your voice down. Yes."
+    },
+    "felix-1": {
+      "voice": "felix",
+      "text": "Vale's Board meets at midnight, in the lounge on deck six. Members only. Castell's up there too. Vale's keeping him close, and not as a favour."
+    },
+    "nav-f1a": {
+      "voice": "navarro",
+      "text": "What does Vale want with Castell?"
+    },
+    "felix-1a": {
+      "voice": "felix",
+      "text": "Castell lost a witness and a fortune in one night. The Meridian don't carry losses. They cut them."
+    },
+    "nav-f1b": {
+      "voice": "navarro",
+      "text": "How do I get up there?"
+    },
+    "felix-1b": {
+      "voice": "felix",
+      "text": "Not as a guest. Stewards serve the lounge, and security walks where it likes. There are uniforms in the laundry, deck two."
+    },
+    "felix-2": {
+      "voice": "felix",
+      "text": "You came aboard clean, so I left you something. The spa, deck five. Locker twelve."
+    },
+    "nav-f2a": {
+      "voice": "navarro",
+      "text": "What is it?"
+    },
+    "felix-2a": {
+      "voice": "felix",
+      "text": "Something with a quiet voice. Don't make me regret it."
+    },
+    "nav-f2b": {
+      "voice": "navarro",
+      "text": "Thanks, Felix."
+    },
+    "felix-2b": {
+      "voice": "felix",
+      "text": "Don't thank me. If they find you, they find me."
+    },
+    "felix-3": {
+      "voice": "felix",
+      "text": "If you want to know who you're dealing with, start with the purser's records, and the cargo hold. Now go. You're making me nervous."
+    },
+    "castell-0": {
+      "voice": "castell",
+      "text": "I didn't order anything. Who are you?"
+    },
+    "nav-c0a": {
+      "voice": "navarro",
+      "text": "Room service, sir."
+    },
+    "castell-0a": {
+      "voice": "castell",
+      "text": "I said I didn't order... wait. You're no steward. Close the door."
+    },
+    "nav-c0b": {
+      "voice": "navarro",
+      "text": "A friend of Kessler's."
+    },
+    "castell-0b": {
+      "voice": "castell",
+      "text": "Kessler's dead. So you're nobody's friend. Close the door."
+    },
+    "castell-1": {
+      "voice": "castell",
+      "text": "What do you want?"
+    },
+    "nav-c1a": {
+      "voice": "navarro",
+      "text": "I know what Vale's planning for you."
+    },
+    "castell-1a": {
+      "voice": "castell",
+      "text": "Then you know more than I do. Tell me."
+    },
+    "nav-c2": {
+      "voice": "navarro",
+      "text": "The Board meets at midnight. You're the first item on the agenda."
+    },
+    "castell-2": {
+      "voice": "castell",
+      "text": "Thirty years I've made them money. And they'll put me over the side like rubbish."
+    },
+    "castell-3": {
+      "voice": "castell",
+      "text": "What do you want for it?"
+    },
+    "nav-c3a": {
+      "voice": "navarro",
+      "text": "Vale's keycard."
+    },
+    "castell-3a": {
+      "voice": "castell",
+      "text": "He gave me a card to his suite, in case I needed him. Take it. If you're going to do what I think you are, do it before midnight."
+    },
+    "nav-c3b": {
+      "voice": "navarro",
+      "text": "Tell me about the Meridian."
+    },
+    "castell-3b": {
+      "voice": "castell",
+      "text": "Five families, one table. Vale keeps the books, and the books never leave this ship. They're in his safe."
+    },
+    "nav-threat": {
+      "voice": "navarro",
+      "text": "You'll give me Vale's keycard, or I put you over the side myself."
+    },
+    "castell-threat": {
+      "voice": "castell",
+      "text": "All right! All right. Here. His keycard. Just keep me out of it."
+    },
+    "c2-felix-done": {
+      "voice": "overwatch",
+      "text": "A gun in a spa locker. I like him. Get it, then find out who these people really are."
+    },
+    "c2-gun": {
+      "voice": "overwatch",
+      "text": "Keep it holstered unless you mean it. A gun in your hand is the one thing nobody here will miss."
+    },
+    "lead2-manifest": {
+      "voice": "overwatch",
+      "text": "Five names flagged on the manifest, all with suites on deck six. That's the Board."
+    },
+    "lead2-hold": {
+      "voice": "overwatch",
+      "text": "Meridian Trading. That's Castell's money in those crates, on its way to somebody else."
+    },
+    "lead2-schedule": {
+      "voice": "overwatch",
+      "text": "Vale takes the air on his balcony at one, with only Bruno on his door. Noted."
+    },
+    "lead2-telex": {
+      "voice": "overwatch",
+      "text": "Item one on the Board's agenda: Castell. They're going to kill him tonight."
+    },
+    "lead2-overheard": {
+      "voice": "overwatch",
+      "text": "So the vote's a formality. Vale's already decided."
+    },
+    "c2-meridian-done": {
+      "voice": "overwatch",
+      "text": "That's the picture. Five families, Vale at the head of the table, and Castell is the price of tonight's meeting. Go and see Castell. He's scared, and scared men talk."
+    },
+    "c2-keycard": {
+      "voice": "overwatch",
+      "text": "Vale's keycard. Now you can get to him. And if you'd rather it looked like his heart, the medical centre on deck three keeps digoxin. He drinks a toast at the Board."
+    },
+    "mer-talk-0": {
+      "voice": "guard1",
+      "text": "You think Vale lets Castell walk off this ship?"
+    },
+    "mer-talk-1": {
+      "voice": "guard3",
+      "text": "Vale doesn't let anybody walk. The vote's a formality."
+    },
+    "mer-talk-2": {
+      "voice": "guard1",
+      "text": "Midnight, then. And the books?"
+    },
+    "mer-talk-3": {
+      "voice": "guard3",
+      "text": "Same place they always are. His safe. Come on, drink up."
+    },
+    "vale-speech": {
+      "voice": "vale",
+      "text": "Gentlemen. One item tonight, and you all know what it is."
+    },
+    "vale-toast": {
+      "voice": "vale",
+      "text": "To the families. And to cutting our losses."
+    },
+    "c2-vale-meeting": {
+      "voice": "overwatch",
+      "text": "Vale's on the move. The Board's convening in the lounge."
+    },
+    "c2-vale-balcony": {
+      "voice": "overwatch",
+      "text": "He's alone on his balcony. That's your one o'clock."
+    },
+    "c2-vale-poison": {
+      "voice": "overwatch",
+      "text": "He's down. A heart attack, as far as anyone on that ship knows. Walk, don't run. The stern, deck four: we're coming alongside."
+    },
+    "c2-vale-overboard": {
+      "voice": "overwatch",
+      "text": "Man overboard, and nobody saw a thing. Get to the stern, deck four. We're coming alongside."
+    },
+    "c2-vale-shot": {
+      "voice": "overwatch",
+      "text": "Vale's dead. Now get out of there. The stern, deck four. We're coming alongside."
+    },
+    "c2-poison": {
+      "voice": "overwatch",
+      "text": "That'll stop a heart. Now you need to be near his glass, and dressed for it."
+    },
+    "c2-win": {
+      "voice": "overwatch",
+      "text": "You're clear. The Meridian just lost their head, and Castell lost his protection. Good work, Navarro."
+    },
+    "reyes-freed": {
+      "voice": "reyes",
+      "text": "Who... you're here for me? They'll have heard that. Get me out of here."
+    },
+    "smokers-0": {
+      "voice": "mills",
+      "text": "How long are we babysitting the accountant?"
+    },
+    "smokers-1": {
+      "voice": "dario",
+      "text": "Till the boat. Two o'clock, Kessler says."
+    },
+    "smokers-2": {
+      "voice": "mills",
+      "text": "Stuck up in that study all night with the music going. Poor guy."
+    },
+    "smokers-3": {
+      "voice": "dario",
+      "text": "Better him than us. Kessler's got the only card for those doors."
+    },
+    "smokers-4": {
+      "voice": "mills",
+      "text": "And he won't let it out of his hand. Sleeps with it, probably."
+    },
+    "smokers-5": {
+      "voice": "dario",
+      "text": "Ha. Come on. If he catches us out here, we're next."
+    },
+    "c3-arrival-0": {
+      "voice": "overwatch",
+      "text": "Terminal Est. Two cranes, one ship, and somewhere in that yard, everything the Meridian have left."
+    },
+    "c3-arrival-1": {
+      "voice": "navarro",
+      "text": "And they leave it sitting on the quay?"
+    },
+    "c3-arrival-2": {
+      "voice": "overwatch",
+      "text": "Under armed guard, until it's loaded. Nadia's inside. Go to work."
+    },
+    "c3-intro": {
+      "voice": "overwatch",
+      "text": "You're on the night shift now. Nadia left you a kit behind her car, the white hatchback. Put it on before you go anywhere near that gate."
+    },
+    "c3-dressed": {
+      "voice": "overwatch",
+      "text": "Hard hat, hi-vis. Nobody looks twice at a docker. Nadia's on her break in the canteen, past the staff gate."
+    },
+    "c3-nadia-done": {
+      "voice": "overwatch",
+      "text": "Then that's your first job: her bag, in the gate office. Terminal security's uniform gets you through that door. Take one off a guard if you have to."
+    },
+    "c3-found": {
+      "voice": "overwatch",
+      "text": "That's it. Six oh oh seven one four, in the compound on the quay. Get the charge on its doors."
+    },
+    "c3-planted": {
+      "voice": "overwatch",
+      "text": "Charge is live. Bad news: Marchetti's putting his own men on the gates, checking faces. Go out the west end, through the hole in the fence past the yard. I'm bringing the van round."
+    },
+    "c3-win": {
+      "voice": "overwatch",
+      "text": "And there it goes. The Meridian just lost their reserve. Come home, Navarro."
+    },
+    "lead3-booking": {
+      "voice": "overwatch",
+      "text": "Four boxes booked in by Meridian Trading, shipped from Castell's warehouse in Genoa. So the money's still his."
+    },
+    "lead3-loadplan": {
+      "voice": "overwatch",
+      "text": "The planner's flagged one box: six oh oh seven one four. Load last, on deck, armed escort."
+    },
+    "lead3-xray": {
+      "voice": "overwatch",
+      "text": "Three of them scan as machine parts. Seven one four is a solid block of metal. That's your gold."
+    },
+    "lead3-overheard": {
+      "voice": "overwatch",
+      "text": "The green seal. Seven one four. That's the one they're watching."
+    },
+    "nadia-0": {
+      "voice": "nadia",
+      "text": "You're Navarro. Sit down. You look like a tourist."
+    },
+    "nav-n0a": {
+      "voice": "navarro",
+      "text": "Overwatch sends her regards."
+    },
+    "nadia-0a": {
+      "voice": "nadia",
+      "text": "Overwatch sends a lot of things. This time it's heavy, and that's the problem."
+    },
+    "nav-n0b": {
+      "voice": "navarro",
+      "text": "Where's the package?"
+    },
+    "nadia-0b": {
+      "voice": "nadia",
+      "text": "That's the problem. Sit down and listen."
+    },
+    "nadia-1": {
+      "voice": "nadia",
+      "text": "Four boxes came in tonight for Meridian Trading. All four go on the Sirocco, last, under their own guard. Only one of them is the reserve."
+    },
+    "nav-n1a": {
+      "voice": "navarro",
+      "text": "Which one?"
+    },
+    "nadia-1a": {
+      "voice": "nadia",
+      "text": "I don't know. Nobody does, except the planner upstairs in Ops. Look at his load plan. Or customs: they scanned all four."
+    },
+    "nav-n1b": {
+      "voice": "navarro",
+      "text": "What's in it?"
+    },
+    "nadia-1b": {
+      "voice": "nadia",
+      "text": "Gold. Bonds. Everything the families couldn't leave in a bank once Vale died. Their war chest."
+    },
+    "nadia-2": {
+      "voice": "nadia",
+      "text": "And the charge? Security did bag checks at shift change and took mine. It's in the evidence locker in the gate office. You'll want one of their uniforms to go in there."
+    },
+    "mer3-talk-0": {
+      "voice": "guard3",
+      "text": "Marchetti wants the green seal loaded last. On deck, where he can see it."
+    },
+    "mer3-talk-1": {
+      "voice": "guard5",
+      "text": "Seven one four? Half a ton of gold on a feeder. If the families knew how we're moving it."
+    },
+    "mer3-talk-2": {
+      "voice": "guard3",
+      "text": "The families agreed. Vale's gone. The money goes where nobody can freeze it."
+    },
+    "mer3-talk-3": {
+      "voice": "guard5",
+      "text": "Tangier by Thursday. Then it's someone else's problem."
+    },
+    "c3-bag": {
+      "voice": "overwatch",
+      "text": "That's the charge. Now find out which of the four boxes it goes on. Three things that agree, Navarro. We get one shot at this."
+    }
+  },
+  "barks": {
+    "_about": "Things guards (and Reyes) say. Guard kinds are recorded in every guard voice (plus Kessler, Mills and Dario); `reyes-*` only in his.",
+    "huh": [
+      "Huh?",
+      "What was that?",
+      "Somebody there?",
+      "Hold on."
+    ],
+    "search": [
+      "I know you're here.",
+      "Check the corners.",
+      "Come on out."
+    ],
+    "lost": [
+      "Must have been nothing.",
+      "Probably the music.",
+      "Nothing here. Back to it."
+    ],
+    "spotted": [
+      "Hey! You!",
+      "Intruder! Over here!",
+      "Contact! Got one!"
+    ],
+    "combat": [
+      "Taking fire!",
+      "Flank him!",
+      "Keep shooting!",
+      "He's over there!"
+    ],
+    "body": [
+      "Man down! We have a man down!",
+      "He's dead! Call it in!"
+    ],
+    "camera": [
+      "Movement on the cameras. Somebody check it.",
+      "I've got something on camera."
+    ],
+    "deadfeed": [
+      "Camera's gone dark. Someone take a look."
+    ],
+    "hurt": [
+      "Agh!",
+      "I'm hit!"
+    ],
+    "warn": [
+      "Sir! Guests aren't allowed back here.",
+      "Excuse me. This area is staff only.",
+      "Hey. You can't be in here. Out."
+    ],
+    "reyes-wait": [
+      "Wait! Don't leave me!",
+      "Slow down!"
+    ],
+    "reyes-scared": [
+      "They're shooting at us!",
+      "Oh God. Oh God."
+    ],
+    "reyes-hurt": [
+      "I'm hit! I'm hit!",
+      "Agh!"
+    ],
+    "reyes-van": [
+      "Is that the van? Thank God."
+    ],
+    "warnPort": [
+      "Hey! Staff only past this point.",
+      "Where's your pass? Out you go.",
+      "Off limits, mate. Turn around."
+    ]
+  },
+  "guardVoices": [
+    "guard1",
+    "guard2",
+    "guard3",
+    "guard4",
+    "guard5",
+    "kessler",
+    "mills",
+    "dario"
+  ]
+}

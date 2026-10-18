@@ -12,6 +12,8 @@ export class MissionHud {
   private readonly root = $('mission');
   private readonly wedges: HTMLElement[] = [];
   private radioTimer = 0;
+  private intelTimer = 0;
+  private readonly tagEls: HTMLElement[] = [];
 
   constructor() {
     const ring = $('detect');
@@ -25,7 +27,17 @@ export class MissionHud {
   }
 
   show(): void { this.root.style.display = 'block'; }
-  hide(): void { this.root.style.display = 'none'; }
+  hide(): void {
+    this.root.style.display = 'none';
+    this.restricted(null);
+    this.hideIntel();
+    this.leads([]);
+    this.gadgets('');
+    this.dialogue(null);
+    for (const el of this.tagEls) el.remove();
+    this.tagEls.length = 0;
+    $('tacmap').classList.remove('on');
+  }
 
   objective(title: string, text: string, sub = ''): void {
     $('objTitle').textContent = title;
@@ -41,10 +53,123 @@ export class MissionHud {
     $('objSub').textContent = text;
   }
 
+  /** A checklist under the objective (leads to follow up). Empty to hide it. */
+  leads(items: { name: string; state: 'open' | 'found' | 'lost' }[]): void {
+    const ul = $('objLeads');
+    ul.innerHTML = '';
+    for (const it of items) {
+      const li = document.createElement('li');
+      li.className = it.state;
+      li.textContent = it.name;
+      ul.appendChild(li);
+    }
+  }
+
+  /**
+   * Shows what a clue says for a while: `kind` styles it as paper, a screen or a phone.
+   * `body` is trusted markup written in the mission script.
+   */
+  intel(kind: 'paper' | 'screen' | 'phone', from: string, title: string, body: string, seconds = 14): void {
+    const el = $('intel');
+    el.className = `k-${kind}`;
+    el.querySelector('.intel-from')!.textContent = from;
+    el.querySelector('.intel-title')!.textContent = title;
+    el.querySelector('.intel-body')!.innerHTML = body;
+    void el.offsetWidth;
+    el.classList.add('on');
+    this.intelTimer = seconds;
+  }
+
+  /** Your replies in a conversation (null: none showing). */
+  dialogue(choices: string[] | null): void {
+    const el = $('dialogue');
+    el.innerHTML = '';
+    el.classList.toggle('on', !!choices?.length);
+    choices?.forEach((text, i) => {
+      const row = document.createElement('div');
+      const k = document.createElement('kbd');
+      k.textContent = String(i + 1);
+      row.append(k, document.createTextNode(text));
+      el.appendChild(row);
+    });
+  }
+
+  /** The gadget line (coins left, key hints); trusted markup. */
+  gadgets(html: string): void {
+    const el = $('gadgets');
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+
+  /**
+   * Markers over tagged guards, seen through walls: colour by how alert they are, with their
+   * awareness of you as a small bar.
+   */
+  tags(camera: THREE.PerspectiveCamera, list: { pos: THREE.Vector3; mood: 'calm' | 'wary' | 'combat'; awareness: number }[]): void {
+    const root = $('tags');
+    let n = 0;
+    const p = new THREE.Vector3();
+    for (const t of list) {
+      p.copy(t.pos).project(camera);
+      if (p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05) continue;
+      let el = this.tagEls[n];
+      if (!el) {
+        el = document.createElement('div');
+        el.innerHTML = '<s><b></b></s><i></i>';
+        root.appendChild(el);
+        this.tagEls.push(el);
+      }
+      const d = camera.position.distanceTo(t.pos);
+      el.className = `tag ${t.mood}${d > 35 ? ' far' : ''}`;
+      el.style.display = '';
+      el.style.left = `${(p.x * 0.5 + 0.5) * 100}%`;
+      el.style.top = `${(-p.y * 0.5 + 0.5) * 100}%`;
+      (el.firstElementChild!.firstElementChild as HTMLElement).style.width = `${Math.round(t.awareness * 100)}%`;
+      n++;
+    }
+    for (let i = n; i < this.tagEls.length; i++) this.tagEls[i].style.display = 'none';
+  }
+
+  hideIntel(): void {
+    this.intelTimer = 0;
+    $('intel').classList.remove('on');
+  }
+
   alarm(level: AlarmName): void {
     const el = $('alarm');
     el.className = level;
     el.textContent = level.toUpperCase();
+  }
+
+  /** The status badge with its own words (undercover: your cover and where you are). */
+  /**
+   * Somewhere you're not allowed (label: who is), or null once you're out. Entering flashes the
+   * warning card; the red edge stays while you're in.
+   */
+  restricted(label: string | null, detail = ''): boolean {
+    const el = $('restricted');
+    const was = el.classList.contains('on');
+    if (!label) {
+      if (was) el.classList.remove('on', 'flash');
+      this.rzLabel = '';
+      return false;
+    }
+    // Already in, and it's the same kind of place: nothing new to say.
+    const text = `${label}${detail ? ` · ${detail}` : ''}`;
+    if (was && text === this.rzLabel) return false;
+    this.rzLabel = text;
+    $('rzText').textContent = text;
+    el.classList.add('on', 'flash');
+    clearTimeout(this.rzTimer);
+    this.rzTimer = window.setTimeout(() => el.classList.remove('flash'), 3200);
+    return true;
+  }
+  private rzTimer = 0;
+  private rzLabel = '';
+
+  status(text: string, level: AlarmName): void {
+    const el = $('alarm');
+    if (el.className !== level) el.className = level;
+    if (el.textContent !== text) el.textContent = text;
   }
 
   /** A radio line or overheard chatter, for a few seconds. */
@@ -65,6 +190,10 @@ export class MissionHud {
     if (this.radioTimer > 0) {
       this.radioTimer -= dt;
       if (this.radioTimer <= 0) $('radio').classList.remove('on');
+    }
+    if (this.intelTimer > 0) {
+      this.intelTimer -= dt;
+      if (this.intelTimer <= 0) $('intel').classList.remove('on');
     }
     // Waypoint: on screen at the target, or pinned to the edge pointing at it.
     const wp = $('waypoint');

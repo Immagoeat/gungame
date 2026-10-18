@@ -76,9 +76,12 @@ export class Menu {
     this.show('main', false);
   }
 
-  showPause(info: string): void {
+  /** @param details trusted markup from the mode (objectives, intel). */
+  showPause(info: string, details = ''): void {
     this.navStack.length = 0;
     $('pauseInfo').textContent = info;
+    $('pauseDetails').innerHTML = details;
+    $('scr-pause').classList.toggle('details', !!details);
     this.show('pause', false);
   }
 
@@ -91,6 +94,7 @@ export class Menu {
     $('againBtn').textContent = r.againLabel ?? 'Play Again';
     $('overStats').innerHTML = r.stats
       .map(s => `<div><b>${escapeHtml(s.value)}</b><span>${escapeHtml(s.label)}</span></div>`).join('');
+    $('overExtra').innerHTML = r.extraHtml ?? '';
     this.show('over', false);
   }
 

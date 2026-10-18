@@ -49,8 +49,11 @@ export const LOOK_OPTIONS: Record<LookSlot, LookOption[]> = {
   face: [
     { id: 'clean', name: 'Clean Shaven' },
     { id: 'stubble', name: 'Stubble' },
+    { id: 'short', name: 'Short Beard' },
     { id: 'beard', name: 'Full Beard' },
     { id: 'goatee', name: 'Goatee' },
+    { id: 'moustache', name: 'Moustache' },
+    { id: 'chinstrap', name: 'Chin Strap' },
   ],
   hair: [
     { id: 'black', name: 'Black', colors: [0x141110] },

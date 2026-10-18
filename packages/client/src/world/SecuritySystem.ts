@@ -135,7 +135,8 @@ export class SecuritySystem {
     for (let i = 0; i < Math.min(FEEDS_PER_FRAME, this.screens.length); i++) {
       const s = this.screens[this.cursor++ % this.screens.length];
       const cam = this.cams[s.camIndex];
-      if (cam.destroyed) continue;
+      // No camera on this screen (a bank with more screens than cameras): it stays dark.
+      if (!cam || cam.destroyed) continue;
       cam.view.updateMatrixWorld();
       renderer.setRenderTarget(s.target);
       renderer.clear();

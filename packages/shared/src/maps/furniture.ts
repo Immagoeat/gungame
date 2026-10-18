@@ -165,6 +165,53 @@ export const FURNITURE = {
   valetStand: { size: [0.7, 1.3, 0.6] },
   ledOrb: { size: [0.6, 0.6, 0.6], solid: false },
   discoBall: { size: [0.6, 1.5, 0.6], solid: false },
+
+  // Ship
+  slotMachine: { size: [0.7, 1.75, 0.7] },
+  cardTable: { size: [2.4, 0.78, 1.3] },
+  rouletteTable: { size: [2.8, 0.92, 1.3] },
+  /** Hangs from davits over the deck edge: the hull blocks you, the boat itself is out of reach. */
+  lifeboat: { size: [8.5, 3.0, 2.8], solid: false },
+  bollard: { size: [0.6, 0.6, 0.6], resistance: 100 },
+  bunkBed: { size: [2.0, 1.8, 0.95] },
+  shipEngine: { size: [6, 3, 2.8], resistance: 120 },
+  lifeRing: { size: [0.75, 0.75, 0.12], solid: false },
+  washer: { size: [0.9, 1.45, 0.9], resistance: 40 },
+  laundryCart: { size: [1.0, 0.9, 0.65] },
+  storageRack: { size: [2.0, 2.2, 0.6], resistance: 20 },
+  crewLocker: { size: [2.0, 1.95, 0.5], resistance: 30 },
+  galleyRange: { size: [1.8, 0.95, 0.9], resistance: 60 },
+  controlPanel: { size: [2.4, 1.25, 0.8], resistance: 40 },
+  helm: { size: [0.9, 1.3, 0.7], resistance: 40 },
+  radarConsole: { size: [1.0, 1.3, 0.85], resistance: 40 },
+  /** Overhead pipework (hang it near the ceiling: y is its underside). */
+  pipeRun: { size: [6, 0.5, 0.6], solid: false },
+  // Port
+  /** A stack of 40-foot containers: h is the stack's height, in whole boxes of 2.59 m. variant seeds the colours. */
+  shippingContainer: { size: [12.2, 2.59, 2.44], resistance: 120 },
+  /** A ship-to-shore gantry crane: legs at the corners of w × d, the boom out over the water in front (+z). */
+  gantryCrane: {
+    size: [18, 48, 26], resistance: 200,
+    colliders: (w, _h, d) => [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => [sx * w / 2 - 0.8, 0, sz * d / 2 - 0.8, sx * w / 2 + 0.8, 3.5, sz * d / 2 + 0.8]),
+  },
+  straddleCarrier: {
+    size: [5.5, 14, 9], resistance: 120,
+    colliders: (w, _h, d) => [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => [sx * w / 2 - 0.45, 0, sz * d / 2 - 0.5, sx * w / 2 + 0.45, 2.2, sz * d / 2 + 0.5]),
+  },
+  lightMast: { size: [0.8, 26, 0.8], resistance: 200, colliders: () => [[-0.3, 0, -0.3, 0.3, 26, 0.3]] },
+  xrayScanner: {
+    size: [6.5, 7.5, 3], resistance: 150,
+    colliders: (w, h, d) => [[-w / 2, 0, -d / 2, -w / 2 + 1, h, d / 2], [w / 2 - 1, 0, -d / 2, w / 2, h, d / 2]],
+  },
+  /** A container trailer (the chassis only: put a container on it). */
+  trailer: { size: [12.4, 1.45, 2.5], resistance: 80 },
+  jerseyBarrier: { size: [3, 0.85, 0.6], resistance: 200 },
+  vendingMachine: { size: [1, 1.9, 0.8], resistance: 30 },
+  /**
+   * A warning sign: on two posts (h over 1), or just the panel on a wall or fence (h 1 or less: y is
+   * its bottom edge). variant: 0 authorised personnel only, 1 staff only, 2 private (the Meridian), 3 customs.
+   */
+  warningSign: { size: [1.2, 2.3, 0.08], resistance: 20, colliders: (w, h) => (h > 1 ? [-1, 1].map(sx => [sx * w * 0.42 - 0.04, 0, -0.04, sx * w * 0.42 + 0.04, h, 0.04]) : []) },
 } satisfies Record<string, FurnitureSpec>;
 
 export type FurnitureType = keyof typeof FURNITURE;

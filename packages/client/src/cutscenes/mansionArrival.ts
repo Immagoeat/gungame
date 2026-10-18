@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AABB } from '@gungame/shared';
 import type { Game } from '../core/Game';
+import type { VoiceLineId } from '../audio/Voice';
 import type { AvatarState } from '../entities/avatar';
 import { createVan, type Van } from '../world/vehicles/van';
 import type { Cutscene, CutsceneFrame } from './Cutscene';
@@ -26,14 +27,15 @@ const span = (t: number, a: number, b: number) => THREE.MathUtils.clamp((t - a) 
 const drift = (t: number, seed: number) => Math.sin(t * 0.9 + seed) * 0.6 + Math.sin(t * 1.7 + seed * 2.3) * 0.3 + Math.sin(t * 3.1 + seed * 4.1) * 0.1;
 
 /** Radio chatter: [start, end, speaker, line]. Edit freely; times are seconds into the scene. */
-export const ARRIVAL_DIALOGUE: [number, number, string, string][] = [
-  [7.2, 9.4, 'Overwatch', 'Viper, Overwatch. Radio check.'],
-  [9.7, 10.9, 'Viper', 'Loud and clear.'],
-  [11.2, 14.4, 'Overwatch', "Party's in full swing. Two hundred guests, private security on every door."],
-  [14.7, 17.6, 'Overwatch', 'Gate is open for the vendors. Nobody looks twice at a black van in Beverly Hills.'],
-  [18.0, 19.6, 'Viper', 'Copy. Rolling in.'],
-  [22.9, 25.6, 'Overwatch', 'Cameras are live on every floor. Stay out of sight.'],
-  [26.0, 27.6, 'Overwatch', 'Good luck, Viper.'],
+/** Radio chatter on the way in: when each line should start (s). Text and length come from the voice lines. */
+export const ARRIVAL_DIALOGUE: [number, VoiceLineId][] = [
+  [7.2, 'arrival-0'],
+  [9.6, 'arrival-1'],
+  [10.8, 'arrival-2'],
+  [15.0, 'arrival-3'],
+  [18.5, 'arrival-4'],
+  [22.9, 'arrival-5'],
+  [26.0, 'arrival-6'],
 ];
 
 /** The van's route: along the street outside the estate wall, in through the gate and up the drive. */
@@ -66,7 +68,7 @@ const BENCH = 0.48;
 /** The first-person hip hold (camera space), which the body hands over to at the end. */
 const HIP_HOLD = { offset: V(0.16, -0.17, -0.38), rotation: new THREE.Quaternion() };
 
-export function mansionArrival(game: Game): Cutscene {
+export function mansionArrival(game: Game): Cutscene & { readonly van: Van } {
   const van: Van = createVan();
   game.gfx.scene.add(van.group);
   van.group.rotation.order = 'YXZ';
@@ -194,6 +196,7 @@ export function mansionArrival(game: Game): Cutscene {
   const frame: CutsceneFrame = { camera: { position: V(0, 0, 0), target: V(0, 0, 0), fov: 45 }, actor: null, bars: 1, fade: 1 };
 
   return {
+    van,
     duration: DURATION,
     end,
     update(dt, t) {
@@ -287,13 +290,21 @@ export function mansionArrival(game: Game): Cutscene {
       engine?.set(t < STOP_TIME ? 0.2 + load * 0.8 : 0.05, THREE.MathUtils.clamp(9 / Math.max(dist, 1), 0.05, 1) * (t > 24.5 ? 0.4 : 1));
 
       // Radio chatter with a squelch at each end.
-      const line = ARRIVAL_DIALOGUE.findIndex(([a, b]) => t >= a && t < b);
+      // Each line at its moment, or just after the one before it if that runs long.
+      let free = 0;
+      const plan = ARRIVAL_DIALOGUE.map(([at, id]) => {
+        const start = Math.max(at, free);
+        free = start + game.voice.info(id).duration + 0.3;
+        return [start, free] as const;
+      });
+      const line = plan.findIndex(([a, b]) => t >= a && t < b);
       if (line !== radioLine) {
-        if (radioLine >= 0) game.audio.radio(false);
-        if (line >= 0) game.audio.radio(true);
+        // Each line once, as it starts (not when scrubbing into the middle of one).
+        if (line >= 0 && t - plan[line][0] < 0.25) game.voice.say(ARRIVAL_DIALOGUE[line][1]);
         radioLine = line;
       }
-      frame.subtitle = line >= 0 ? { speaker: ARRIVAL_DIALOGUE[line][2], text: ARRIVAL_DIALOGUE[line][3] } : null;
+      const said = line >= 0 ? game.voice.info(ARRIVAL_DIALOGUE[line][1]) : null;
+      frame.subtitle = said ? { speaker: said.speaker, text: said.text } : null;
 
       // Fade up from black, a quick dip to black into the van, bars retract at the end.
       const dip = 1 - Math.min(1, Math.abs(t - SHOT.B) / 0.3);
@@ -314,7 +325,7 @@ export function mansionArrival(game: Game): Cutscene {
       van.group.updateMatrixWorld(true);
       engine?.stop();
       engine = null;
-      if (radioLine >= 0) game.audio.radio(false);
+      game.voice.stopRadio();
       radioLine = -1;
       // Parked: solid to walk into and to shoot.
       const p = van.group.position;

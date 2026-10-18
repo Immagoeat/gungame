@@ -1,5 +1,19 @@
 import { PartyMusic } from '../audio/PartyMusic';
 
+/** What a footstep lands on (see World.surfaceAt). */
+export type Surface = 'stone' | 'tile' | 'wood' | 'metal' | 'carpet' | 'grass';
+
+type Burst = [BiquadFilterType, number, number, number];
+/** Each surface's footstep: a filtered noise body, and an optional sharper click on top [filter, Hz, seconds, level]. */
+const STEP_SOUNDS: Record<Surface, { body: Burst; click?: Burst }> = {
+  stone: { body: ['lowpass', 650, 0.08, 0.16], click: ['bandpass', 2600, 0.025, 0.05] },
+  tile: { body: ['lowpass', 520, 0.06, 0.1], click: ['bandpass', 3200, 0.03, 0.09] },
+  wood: { body: ['lowpass', 420, 0.12, 0.2], click: ['bandpass', 1100, 0.04, 0.07] },
+  metal: { body: ['lowpass', 320, 0.1, 0.16], click: ['bandpass', 1500, 0.11, 0.07] },
+  carpet: { body: ['lowpass', 260, 0.08, 0.08] },
+  grass: { body: ['lowpass', 380, 0.07, 0.07], click: ['highpass', 3800, 0.08, 0.03] },
+};
+
 /** Procedural sound effects via WebAudio. Call init() from a user gesture before anything plays. */
 export class AudioSystem {
   private ctx: AudioContext | null = null;
@@ -32,6 +46,68 @@ export class AudioSystem {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.ctx = ctx;
+  }
+
+  /** Decodes a compressed sound file (works before init(): decoding needs no running context). */
+  decode(data: ArrayBuffer): Promise<AudioBuffer> {
+    this.decoder ??= new OfflineAudioContext(1, 1, 48000);
+    return this.decoder.decodeAudioData(data);
+  }
+  private decoder: OfflineAudioContext | null = null;
+
+  /**
+   * A voice line. Over the radio: in your ear, with a squelch either end, and the music ducks under
+   * it. In the world (`at`): from that side, quieter with distance and muffled through walls.
+   * Returns a handle to cut it off, or null if nothing played (no audio yet, or too far to hear).
+   */
+  voice(buffer: AudioBuffer, opts: { radio?: boolean; at?: { x: number; y: number; z: number }; muffled?: boolean; vol?: number } = {}): { stop(): void } | null {
+    const { ctx, master } = this;
+    if (!ctx || !master) return null;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const g = ctx.createGain();
+    let out: AudioNode = g;
+    let level = opts.vol ?? 1;
+    if (opts.at) {
+      const { pos, right } = this.listener;
+      const dx = opts.at.x - pos.x, dy = opts.at.y - pos.y, dz = opts.at.z - pos.z;
+      const d = Math.hypot(dx, dy, dz);
+      level *= Math.min(1, 4 / (d + 1.5)) * (opts.muffled ? 0.55 : 1);
+      if (level < 0.025) return null;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = d > 0.5 ? ((dx * right.x + dz * right.z) / d) * 0.8 : 0;
+      out.connect(pan);
+      out = pan;
+      if (opts.muffled) {
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 900;
+        out.connect(lp);
+        out = lp;
+      }
+    }
+    out.connect(master);
+    g.gain.value = level;
+    src.connect(g);
+    const lead = opts.radio ? 0.08 : 0;
+    src.start(t + lead);
+    if (opts.radio) {
+      this.radio(true);
+      src.onended = () => this.radio(false);
+      this.duck(t, t + lead + buffer.duration);
+    }
+    return { stop: () => { try { src.stop(); } catch { /* already stopped */ } } };
+  }
+
+  /** Music dips under radio chatter. */
+  private duck(from: number, to: number): void {
+    const bus = this.musicBus;
+    if (!bus) return;
+    const gain = bus.gain;
+    gain.cancelScheduledValues(from);
+    gain.setTargetAtTime(this.musicLevel * 0.45, from, 0.08);
+    gain.setTargetAtTime(this.musicLevel, to + 0.2, 0.3);
   }
 
   setMusicVolume(v: number): void {
@@ -110,8 +186,9 @@ export class AudioSystem {
   }
 
   /** Filtered noise burst. `type` picks the filter, `freq` its cutoff/center. */
-  private burst(type: BiquadFilterType, freq: number, dur: number, vol: number, delay = 0): void {
-    const { ctx, master, noise } = this;
+  private burst(type: BiquadFilterType, freq: number, dur: number, vol: number, delay = 0, out?: AudioNode): void {
+    const { ctx, noise } = this;
+    const master = out ?? this.master;
     if (!ctx || !master || !noise) return;
     const t = ctx.currentTime + delay;
     const src = ctx.createBufferSource();
@@ -206,6 +283,172 @@ export class AudioSystem {
    * Night ambience: crickets chirping from around you over a soft breeze. Returns a handle to set
    * its level (0..1) and stop it.
    */
+  /**
+   * At sea: wind over the decks, the slow wash of swells along the hull, and the ship's engines as a
+   * low hum (louder below decks: `set(level, below)`).
+   */
+  seaAmbience(): { set(level: number, below?: number): void; stop(): void } | null {
+    const { ctx, master, noise } = this;
+    if (!ctx || !master || !noise) return null;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(master);
+    const src = (type: BiquadFilterType, freq: number, q: number, gain: number) => {
+      const s = ctx.createBufferSource();
+      s.buffer = noise;
+      s.loop = true;
+      s.playbackRate.value = 0.5 + Math.random() * 0.2;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      s.connect(f).connect(g);
+      s.start();
+      return { s, g };
+    };
+    const wind = src('bandpass', 500, 0.6, 0.05);
+    wind.g.connect(out);
+    // Swells: low washing noise, swelling and fading every few seconds.
+    const wash = src('lowpass', 420, 0.7, 0.0);
+    wash.g.connect(out);
+    const swell = ctx.createOscillator();
+    swell.frequency.value = 0.13;
+    const swellDepth = ctx.createGain();
+    swellDepth.gain.value = 0.06;
+    swell.connect(swellDepth).connect(wash.g.gain);
+    wash.g.gain.value = 0.08;
+    swell.start();
+    // The engines: a low hum with a slow beat.
+    const engine = ctx.createGain();
+    engine.gain.value = 0.02;
+    engine.connect(out);
+    const hums = [42, 43.2, 84].map(f => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 160;
+      o.connect(lp).connect(engine);
+      o.start();
+      return o;
+    });
+    return {
+      set: (level, below = 0) => {
+        out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
+        wind.g.gain.setTargetAtTime(0.05 * (1 - below), ctx.currentTime, 0.4);
+        engine.gain.setTargetAtTime(0.02 + below * 0.1, ctx.currentTime, 0.4);
+      },
+      stop: () => {
+        out.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+        const end = ctx.currentTime + 1;
+        wind.s.stop(end); wash.s.stop(end); swell.stop(end);
+        for (const o of hums) o.stop(end);
+        setTimeout(() => out.disconnect(), 1500);
+      },
+    };
+  }
+
+  /**
+   * A container port at night: wind off the water, the basin lapping at the quay, the hum of the
+   * reefer stacks' generators, and now and then a container being set down somewhere, or a ship's horn.
+   */
+  harbourAmbience(): { set(level: number): void; stop(): void } | null {
+    const { ctx, master, noise } = this;
+    if (!ctx || !master || !noise) return null;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(master);
+    const loop = (type: BiquadFilterType, freq: number, gain: number, rate = 0.6) => {
+      const s = ctx.createBufferSource();
+      s.buffer = noise;
+      s.loop = true;
+      s.playbackRate.value = rate;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      s.connect(f).connect(g).connect(out);
+      s.start();
+      return { s, g };
+    };
+    const wind = loop('bandpass', 420, 0.045);
+    // Lapping: a soft low wash that comes and goes every few seconds.
+    const lap = loop('lowpass', 300, 0.05, 0.45);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.21;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.04;
+    lfo.connect(depth).connect(lap.g.gain);
+    lfo.start();
+    // Generators: a low steady hum.
+    const hum = ctx.createGain();
+    hum.gain.value = 0.012;
+    hum.connect(out);
+    const hums = [50, 100.4, 150.2].map((f, i) => {
+      const o = ctx.createOscillator();
+      o.type = i ? 'sine' : 'sawtooth';
+      o.frequency.value = f;
+      o.connect(hum);
+      o.start();
+      return o;
+    });
+    // Far off: boxes going down on steel, a horn out in the basin.
+    let alive = true;
+    const distant = () => {
+      if (!alive) return;
+      const t = ctx.currentTime;
+      if (Math.random() < 0.8) {
+        for (let i = 0; i < 2; i++) {
+          const o = ctx.createOscillator();
+          o.type = 'square';
+          o.frequency.value = 70 + Math.random() * 40;
+          const f = ctx.createBiquadFilter();
+          f.type = 'lowpass';
+          f.frequency.value = 400;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t + i * 0.14);
+          g.gain.exponentialRampToValueAtTime(0.05, t + i * 0.14 + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.14 + 0.7);
+          o.connect(f).connect(g).connect(out);
+          o.start(t + i * 0.14);
+          o.stop(t + i * 0.14 + 0.8);
+        }
+      } else {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = 92;
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.value = 280;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.035, t + 0.4);
+        g.gain.setValueAtTime(0.035, t + 2.2);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+        o.connect(f).connect(g).connect(out);
+        o.start(t);
+        o.stop(t + 3.5);
+      }
+      setTimeout(distant, 7000 + Math.random() * 14000);
+    };
+    setTimeout(distant, 4000);
+    return {
+      set: level => out.gain.setTargetAtTime(level, ctx.currentTime, 0.4),
+      stop: () => {
+        alive = false;
+        out.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+        const end = ctx.currentTime + 1;
+        wind.s.stop(end); lap.s.stop(end); lfo.stop(end);
+        for (const o of hums) o.stop(end);
+        setTimeout(() => out.disconnect(), 1500);
+      },
+    };
+  }
+
   nightAmbience(): { set(level: number): void; stop(): void } | null {
     const { ctx, master, noise } = this;
     if (!ctx || !master || !noise) return null;
@@ -286,20 +529,53 @@ export class AudioSystem {
     this.burst('lowpass', 300, 0.35, 0.45, 0.35);
   }
 
-  /** A guard calling out or radioing in, heard from where they are. */
-  bark(_kind: 'huh' | 'spotted' | 'body' | 'camera', at: { x: number; y: number; z: number }): void {
+  /** A coin landing: a couple of bright clinks, from where it fell. */
+  clink(at: { x: number; y: number; z: number }): void {
     const { pos } = this.listener;
     const d = Math.hypot(at.x - pos.x, at.y - pos.y, at.z - pos.z);
-    if (d > 30) return;
-    const v = Math.min(1, 6 / (d + 1));
-    // Radio click and a burst of voice-band chatter.
-    this.burst('bandpass', 2200, 0.06, 0.12 * v);
-    for (let i = 0; i < 4; i++) this.burst('bandpass', 500 + Math.random() * 700, 0.09, 0.14 * v, 0.06 + i * 0.09);
+    const v = Math.min(1, 6 / (d + 2));
+    if (v < 0.03) return;
+    this.beep(3400, 0.05, 'sine', 0.05 * v);
+    this.beep(4100, 0.04, 'sine', 0.035 * v, 0.07);
+    this.beep(3700, 0.03, 'sine', 0.02 * v, 0.13);
   }
 
   /** A boot landing on paving. */
   footstep(vol = 1): void {
     this.burst('lowpass', 600, 0.09, 0.18 * vol);
+  }
+
+  /**
+   * One footstep on a surface: the heel strike's body and its click, shaped by what's underfoot.
+   * Given a position it's someone else's: quieter with distance, panned, muffled through walls.
+   */
+  step(surface: Surface, vol = 1, at?: { x: number; y: number; z: number }, muffled = false): void {
+    const { ctx, master } = this;
+    if (!ctx || !master) return;
+    let out: AudioNode = master;
+    let level = vol;
+    if (at) {
+      const { pos, right } = this.listener;
+      const dx = at.x - pos.x, dy = at.y - pos.y, dz = at.z - pos.z;
+      const d = Math.hypot(dx, dy, dz);
+      level *= Math.min(1, 3 / (d + 1)) * (muffled ? 0.5 : 1);
+      if (level < 0.02) return;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = d > 0.5 ? ((dx * right.x + dz * right.z) / d) * 0.85 : 0;
+      pan.connect(master);
+      out = pan;
+      if (muffled) {
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 700;
+        lp.connect(pan);
+        out = lp;
+      }
+    }
+    const j = 0.85 + Math.random() * 0.3;
+    const S = STEP_SOUNDS[surface];
+    this.burst(S.body[0], S.body[1] * j, S.body[2], S.body[3] * level, 0, out);
+    if (S.click) this.burst(S.click[0], S.click[1] * j, S.click[2], S.click[3] * level, 0.005, out);
   }
 
   /** Starts live party music (see PartyMusic). Null until audio is initialised. */

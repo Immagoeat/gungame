@@ -27,6 +27,10 @@ export const GUARD_GUNS: Record<WeaponId, { interval: number; burst: number; pau
 };
 
 const SUIT: CivilianStyle = { top: 'blazer', topColor: 0x111214, bottomColor: 0x111214, accent: 0xf2f2f0, shoes: 0x0d0d0e, hairStyle: 'short' };
+/** A ship's security officer: white uniform shirt, black trousers. */
+export const CREW_UNIFORM: CivilianStyle = { top: 'shirt', topColor: 0xf3f3ef, bottomColor: 0x15171c, shoes: 0x0d0d0e, hairStyle: 'short' };
+/** Terminal security at the port: navy work shirt and trousers under a hi-vis vest. */
+export const PORT_UNIFORM: CivilianStyle = { top: 'shirt', topColor: 0x1d2a44, bottomColor: 0x161a22, accent: 0xd8e637, shoes: 0x111111, hairStyle: 'short', hiVis: true };
 const CHIEF: CivilianStyle = { top: 'blazer', topColor: 0x3a3d44, bottomColor: 0x23252a, accent: 0x0e0f12, shoes: 0x1a1210, hairStyle: 'buzz' };
 const TACTICAL_LOOK: CharacterLook = { ...DEFAULT_LOOK, camo: 'black', headgear: 'helmet', vest: 'plate', gloves: 'black', boots: 'black', face: 'stubble' };
 
@@ -83,8 +87,16 @@ export class Guard implements Body {
   seated: boolean;
   /** A body has been found (so it doesn't raise the alarm twice). */
   discovered = false;
+  /** Body stashed out of sight (a wardrobe, a locker): nobody will find it. */
+  hidden = false;
+  /** When they last warned you off (undercover: you were somewhere you shouldn't be). */
+  warnedAt = -Infinity;
+  /** Their uniform has been taken (the body is in its underclothes). */
+  stripped = false;
   readonly weapon: WeaponId;
   speed = 0;
+  /** Metres left until his next footstep. */
+  stride = 0;
   /** Spawned as reinforcement (not part of the original team). */
   reinforcement = false;
   stuckTimer = 0;
@@ -116,9 +128,9 @@ export class Guard implements Body {
       for (const ch of def.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
       const pick = <T,>(a: readonly T[]) => a[seed++ % a.length];
       const skin = pick(['light', 'fair', 'medium', 'tan', 'brown', 'dark']);
-      const civ = look === 'tactical' ? undefined : look === 'chief' ? CHIEF : SUIT;
+      const civ = look === 'tactical' ? undefined : look === 'chief' ? CHIEF : look === 'crew' ? CREW_UNIFORM : look === 'port' ? PORT_UNIFORM : SUIT;
       const lookDef: CharacterLook = look === 'tactical' ? { ...TACTICAL_LOOK, skin }
-        : { ...DEFAULT_LOOK, skin, hair: pick(['black', 'brown', 'grey', 'blond']), face: pick(['clean', 'stubble', 'beard', 'clean']), headgear: 'none', vest: 'none', gloves: 'none' };
+        : { ...DEFAULT_LOOK, skin, hair: pick(['black', 'brown', 'grey', 'blond']), face: pick(['clean', 'stubble', 'short', 'beard', 'moustache', 'chinstrap', 'clean']), headgear: 'none', vest: 'none', gloves: 'none' };
       avatar = new CharacterAvatar(gltf, lookDef, { npc: true, civ, height: 1.8 + (seed % 5) * 0.02 });
       avatar.setWeapon(def.weapon, {});
       root.add(avatar.group);
@@ -238,7 +250,7 @@ export class Guard implements Body {
         speed: this.speed, forward: this.speed, swimming: false, onGround: true, aiming,
         gunOffset: pistol ? new THREE.Vector3(0.05, -0.12, -0.42) : new THREE.Vector3(0.12, -0.17, -0.3),
         gunRotation: new THREE.Quaternion(),
-        hold: aiming ? undefined : { kind: 'lowReady', blend: 1 },
+        hold: aiming ? undefined : { kind: this.def.relaxed && this.state === 'post' && this.awareness < 0.3 ? 'relaxed' : 'lowReady', blend: 1 },
         down: this.downAnim,
         seat: this.seated && this.alive ? { seat: this.pos.y + 0.48, floor: this.pos.y, lean: 0.2, blend: 1 } : undefined,
         lookAt: this.alive && !aiming ? p.clone().add(new THREE.Vector3(0, 1.6, 0)).addScaledVector(this.facing, 4) : undefined,
